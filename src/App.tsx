@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   StoreData,
   Maquina,
@@ -77,6 +77,12 @@ export default function App() {
     setTurnoAtivo(dentro);
   }, []);
 
+  // 40-second auto-sync loop state (Foto 2)
+  const [segundosParaSync, setSegundosParaSync] = useState(40);
+  const [sincronizando, setSincronizando] = useState(false);
+  const ultimaAtividadeRef = useRef(Date.now());
+  const sincronizandoRef = useRef(false);
+
   // Fetch initial data & subscribe
   const carregarDados = useCallback(async () => {
     try {
@@ -92,6 +98,19 @@ export default function App() {
     }
   }, [checarTurno]);
 
+  const sincronizarAgora = useCallback(async () => {
+    if (sincronizandoRef.current) return;
+    sincronizandoRef.current = true;
+    setSincronizando(true);
+    try {
+      await carregarDados();
+    } finally {
+      setSegundosParaSync(40);
+      sincronizandoRef.current = false;
+      setSincronizando(false);
+    }
+  }, [carregarDados]);
+
   useEffect(() => {
     carregarDados();
 
@@ -101,7 +120,42 @@ export default function App() {
       checarTurno(data.turnoConfig);
     });
 
-    // Centralized API polling every 4 seconds to sync between multiple tablets
+    // Reset inactivity timer when user interacts with tablet
+    const resetAtividade = () => {
+      ultimaAtividadeRef.current = Date.now();
+    };
+
+    window.addEventListener('pointerdown', resetAtividade, { passive: true });
+    window.addEventListener('touchstart', resetAtividade, { passive: true });
+    window.addEventListener('keydown', resetAtividade, { passive: true });
+    window.addEventListener('mousemove', resetAtividade, { passive: true });
+
+    // Wakeup on focus / visibilitychange (Photo 2 - when tablet screen turns on or tab is viewed)
+    const onVisibilidadeChange = () => {
+      if (document.visibilityState === 'visible') {
+        sincronizarAgora();
+      }
+    };
+    const onWindowFocus = () => {
+      sincronizarAgora();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilidadeChange);
+    window.addEventListener('focus', onWindowFocus);
+
+    // 40-second auto-sync loop if nobody is interacting (Photo 2)
+    const intervalOcioso = setInterval(() => {
+      const segundosSemInteracao = Math.floor((Date.now() - ultimaAtividadeRef.current) / 1000);
+      const restantes = Math.max(0, 40 - (segundosSemInteracao % 40));
+      setSegundosParaSync(restantes);
+
+      // When reaching 40s idle loop or cycling every 40s idle
+      if (segundosSemInteracao > 0 && segundosSemInteracao % 40 === 0) {
+        sincronizarAgora();
+      }
+    }, 1000);
+
+    // Light background poll every 4 seconds to sync between multiple tablets
     const syncInterval = setInterval(() => {
       SetupApiService.fetchSync()
         .then((data) => {
@@ -118,10 +172,17 @@ export default function App() {
 
     return () => {
       unsubscribe();
+      window.removeEventListener('pointerdown', resetAtividade);
+      window.removeEventListener('touchstart', resetAtividade);
+      window.removeEventListener('keydown', resetAtividade);
+      window.removeEventListener('mousemove', resetAtividade);
+      document.removeEventListener('visibilitychange', onVisibilidadeChange);
+      window.removeEventListener('focus', onWindowFocus);
+      clearInterval(intervalOcioso);
       clearInterval(syncInterval);
       clearInterval(turnoInterval);
     };
-  }, [carregarDados, checarTurno, storeData.turnoConfig]);
+  }, [carregarDados, checarTurno, sincronizarAgora, storeData.turnoConfig]);
 
   // Handlers
   const handleIniciarSetup = async (maquina: Maquina, modeloAnterior: string) => {
@@ -281,6 +342,28 @@ export default function App() {
     showToast('Checklists padrão restaurados com sucesso!');
   };
 
+  const handleEsvaziarConcluidos = async () => {
+    try {
+      await SetupApiService.esvaziarConcluidos('8619');
+      await carregarDados();
+      showToast('Histórico de registros esvaziado com sucesso! Começando do zero.');
+    } catch (err) {
+      console.error(err);
+      showToast('Erro ao esvaziar registros.');
+    }
+  };
+
+  const handleCarregarDados = async (backup: any) => {
+    try {
+      await SetupApiService.carregarDados(backup, '8619');
+      await carregarDados();
+      showToast('Dados e histórico carregados com sucesso!');
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Erro ao carregar dados.');
+    }
+  };
+
   // Print Handlers
   const handleImprimirDashboard = (
     filtrados: SetupConcluido[],
@@ -425,6 +508,9 @@ export default function App() {
         turnoAtivo={turnoAtivo}
         online={online}
         shiftScheduleStr={shiftScheduleStr}
+        segundosParaSync={segundosParaSync}
+        sincronizando={sincronizando}
+        aoSincronizarAgora={sincronizarAgora}
       />
 
       {/* Main Content Area */}
@@ -463,6 +549,9 @@ export default function App() {
             concluidos={storeData.concluidos || []}
             aoAbrirHistorico={(h, t) => setResumoHistorico({ aberto: true, texto: h, titulo: t })}
             aoImprimir={handleImprimirDashboard}
+            aoCarregarDados={handleCarregarDados}
+            aoEsvaziarConcluidos={handleEsvaziarConcluidos}
+            dadosCompletos={storeData}
           />
         )}
 

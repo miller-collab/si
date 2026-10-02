@@ -11,6 +11,14 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.resolve(__dirname, 'data');
 const DATA_FILE = path.resolve(DATA_DIR, 'setup_store.json');
 
+function formatarTempoStr(ms: number): string {
+  const totalSeg = Math.floor(Math.max(0, ms) / 1000);
+  const h = Math.floor(totalSeg / 3600);
+  const m = Math.floor((totalSeg % 3600) / 60);
+  const s = totalSeg % 60;
+  return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':');
+}
+
 const INITIAL_MAQUINAS: Maquina[] = [];
 
 const INITIAL_PREPARADORES = [
@@ -118,6 +126,21 @@ class StoreManager {
       if (fs.existsSync(DATA_FILE)) {
         const raw = fs.readFileSync(DATA_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
+        const setupsAtivos = parsed.setupsAtivos || INITIAL_SETUPS_ATIVOS;
+        Object.values(setupsAtivos).forEach((s: any) => {
+          if (s && s.eventos && Array.isArray(s.eventos)) {
+            let soma = 0;
+            s.eventos.forEach((ev: any) => {
+              if (!ev.emAndamento && ev.duracaoMs) {
+                soma += ev.duracaoMs;
+              }
+            });
+            if (soma > (s.deductionsMs || 0)) {
+              s.deductionsMs = soma;
+            }
+          }
+        });
+
         return {
           maquinas: parsed.maquinas || INITIAL_MAQUINAS,
           preparadores: parsed.preparadores || INITIAL_PREPARADORES,
@@ -125,7 +148,7 @@ class StoreManager {
           tarefas2: parsed.tarefas2 || INITIAL_TAREFAS_PARTE_2,
           tarefasPendencias: parsed.tarefasPendencias || INITIAL_TAREFAS_PENDENCIAS,
           turnoConfig: parsed.turnoConfig || INITIAL_TURNO,
-          setupsAtivos: parsed.setupsAtivos || INITIAL_SETUPS_ATIVOS,
+          setupsAtivos,
           concluidos: parsed.concluidos || INITIAL_CONCLUIDOS
         };
       }
@@ -310,13 +333,26 @@ class StoreManager {
 
     setup.paradaAtiva = false;
     if (setup.paradaAtual) {
+      const duracaoMs = Math.max(0, agora - setup.paradaAtual.inicioMs);
       setup.paradaAtual.fimMs = agora;
-      setup.paradaAtual.duracaoMs = Math.max(0, agora - setup.paradaAtual.inicioMs);
+      setup.paradaAtual.duracaoMs = duracaoMs;
       setup.paradaAtual.emAndamento = false;
       setup.paradaAtual.motivo = motivoObrigatorio.trim();
 
-      const duracaoMin = Math.round(setup.paradaAtual.duracaoMs / 60000);
-      setup.historico.push(`[${strDH}] Parada encerrada (${duracaoMin} min) - Motivo/Ação: ${motivoObrigatorio.trim()}`);
+      // Deduct duration from setup elapsed time
+      setup.deductionsMs = (setup.deductionsMs || 0) + duracaoMs;
+
+      // Update matching event in setup.eventos
+      const ev = setup.eventos?.find((e) => e.id === setup.paradaAtual?.id);
+      if (ev) {
+        ev.fimMs = agora;
+        ev.duracaoMs = duracaoMs;
+        ev.emAndamento = false;
+        ev.motivo = motivoObrigatorio.trim();
+      }
+
+      const duracaoFormatada = formatarTempoStr(duracaoMs);
+      setup.historico.push(`[${strDH}] Parada encerrada (${duracaoFormatada}) - Motivo: ${motivoObrigatorio.trim()}`);
       setup.paradaAtual = undefined;
     } else {
       setup.historico.push(`[${strDH}] Parada encerrada - Motivo: ${motivoObrigatorio.trim()}`);
@@ -426,6 +462,40 @@ class StoreManager {
       this.data.preparadores.push(clean);
       this.save();
     }
+  }
+
+  public esvaziarConcluidos() {
+    this.data.concluidos = [];
+    this.save();
+  }
+
+  public carregarDadosBackup(backup: any) {
+    if (!backup || typeof backup !== 'object') return;
+    if (Array.isArray(backup.concluidos)) {
+      this.data.concluidos = backup.concluidos;
+    }
+    if (Array.isArray(backup.maquinas)) {
+      this.data.maquinas = backup.maquinas;
+    }
+    if (Array.isArray(backup.preparadores)) {
+      this.data.preparadores = backup.preparadores;
+    }
+    if (backup.setupsAtivos && typeof backup.setupsAtivos === 'object') {
+      this.data.setupsAtivos = backup.setupsAtivos;
+    }
+    if (backup.turnoConfig) {
+      this.data.turnoConfig = backup.turnoConfig;
+    }
+    if (Array.isArray(backup.tarefas1)) {
+      this.data.tarefas1 = backup.tarefas1;
+    }
+    if (Array.isArray(backup.tarefas2)) {
+      this.data.tarefas2 = backup.tarefas2;
+    }
+    if (Array.isArray(backup.tarefasPendencias)) {
+      this.data.tarefasPendencias = backup.tarefasPendencias;
+    }
+    this.save();
   }
 
   public resetDemoData() {
@@ -591,6 +661,29 @@ async function startServer() {
     const { nome } = req.body;
     if (!nome) return res.status(400).json({ error: 'Nome obrigatório' });
     store.adicionarPreparador(nome);
+    res.json({ sucesso: true, data: store.getData() });
+  });
+
+  // Clear completed reports
+  app.post('/api/setup/esvaziar-concluidos', (req, res) => {
+    const { senha } = req.body;
+    if (senha && senha !== '8619' && senha !== '5211') {
+      return res.status(401).json({ error: 'Senha incorreta' });
+    }
+    store.esvaziarConcluidos();
+    res.json({ sucesso: true, data: store.getData() });
+  });
+
+  // Load/Restore backup
+  app.post('/api/setup/carregar-dados', (req, res) => {
+    const { backup, senha } = req.body;
+    if (senha && senha !== '8619' && senha !== '5211') {
+      return res.status(401).json({ error: 'Senha incorreta' });
+    }
+    if (!backup) {
+      return res.status(400).json({ error: 'Dados de backup ausentes' });
+    }
+    store.carregarDadosBackup(backup);
     res.json({ sucesso: true, data: store.getData() });
   });
 

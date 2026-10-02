@@ -339,40 +339,112 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
 
           const temAlmoco = setup.historico.some((h) => h.includes('Almoço'));
 
-          // Parse stop & deduction history
-          const paradasDetalhadas = (setup.historico || [])
-            .filter((h) => h.includes('Parada finalizada') || h.includes('Café') || h.includes('Almoço'))
-            .map((h) => {
-              let tipo: 'parada' | 'cafe' | 'almoco' = 'parada';
-              let titulo = 'Parada Técnica';
+          // Gather detailed stops from structured setup.eventos first, and also historical strings
+          const paradasDetalhadas: Array<{
+            id?: string;
+            tipo: 'parada' | 'cafe' | 'almoco' | string;
+            titulo: string;
+            duracao: string;
+            duracaoMs: number;
+            motivo: string;
+            hora: string;
+          }> = [];
+
+          // 1. Process structured eventos (completed stops & deductions)
+          const eventosList = setup.eventos || [];
+          eventosList.forEach((ev) => {
+            if (ev.emAndamento) return; // Active stop is displayed in the live ongoing banner
+            const durMs = ev.duracaoMs || (ev.fimMs && ev.inicioMs ? Math.max(0, ev.fimMs - ev.inicioMs) : 0);
+            const tipo = ev.tipo || 'parada';
+            const titulo =
+              tipo === 'cafe'
+                ? 'Intervalo de Café'
+                : tipo === 'almoco'
+                ? 'Intervalo de Almoço'
+                : 'Parada com Motivo';
+
+            const duracaoStr =
+              durMs > 0
+                ? formatarTempo(durMs)
+                : tipo === 'cafe'
+                ? '00:15:00'
+                : tipo === 'almoco'
+                ? '01:30:00'
+                : '00:00:00';
+
+            paradasDetalhadas.push({
+              id: ev.id,
+              tipo,
+              titulo,
+              duracao: duracaoStr,
+              duracaoMs: durMs || (tipo === 'cafe' ? 15 * 60000 : tipo === 'almoco' ? 90 * 60000 : 0),
+              motivo: ev.motivo || '',
+              hora: ev.timestamp || ''
+            });
+          });
+
+          // 2. Also inspect setup.historico for strings like "Parada encerrada", "Parada finalizada", "Café", "Almoço"
+          (setup.historico || []).forEach((h) => {
+            const ehParadaEncerrada = h.includes('Parada encerrada') || h.includes('Parada finalizada');
+            const ehCafe = h.includes('Café');
+            const ehAlmoco = h.includes('Almoço');
+
+            if (!ehParadaEncerrada && !ehCafe && !ehAlmoco) return;
+
+            // Extract time
+            const horaMatch = h.match(/\[(.*?)\]/);
+            const hora = horaMatch ? horaMatch[1] : '';
+
+            // Check if already represented in paradasDetalhadas (by timestamp/hour)
+            const jaExiste = paradasDetalhadas.some((p) => hora && p.hora.includes(hora));
+            if (jaExiste) return;
+
+            if (ehCafe) {
+              paradasDetalhadas.push({
+                tipo: 'cafe',
+                titulo: 'Intervalo de Café',
+                duracao: '00:15:00',
+                duracaoMs: 15 * 60 * 1000,
+                motivo: 'Pausa para café',
+                hora
+              });
+            } else if (ehAlmoco) {
+              paradasDetalhadas.push({
+                tipo: 'almoco',
+                titulo: 'Intervalo de Almoço',
+                duracao: '01:30:00',
+                duracaoMs: 90 * 60 * 1000,
+                motivo: 'Pausa para refeição/almoço',
+                hora
+              });
+            } else if (ehParadaEncerrada) {
               let duracao = '';
               let motivo = '';
-              let hora = '';
-
-              const horaMatch = h.match(/\[(.*?)\]/);
-              if (horaMatch) hora = horaMatch[1];
-
-              if (h.includes('Café')) {
-                tipo = 'cafe';
-                titulo = 'Intervalo de Café';
-                duracao = '00:15:00';
-              } else if (h.includes('Almoço')) {
-                tipo = 'almoco';
-                titulo = 'Intervalo de Almoço';
-                duracao = '01:30:00';
-              } else if (h.includes('Parada finalizada')) {
-                tipo = 'parada';
-                titulo = 'Parada com Motivo';
-                const duracaoMatch = h.match(/\((.*?)\)/);
-                if (duracaoMatch) duracao = duracaoMatch[1];
-                const motivoParts = h.split('): ');
-                if (motivoParts.length > 1) {
-                  motivo = motivoParts.slice(1).join('): ');
-                }
+              const durMatch = h.match(/\((.*?)\)/);
+              if (durMatch) duracao = durMatch[1];
+              if (h.includes('Motivo/Ação:')) {
+                motivo = h.split('Motivo/Ação:')[1]?.trim() || '';
+              } else if (h.includes('Motivo:')) {
+                motivo = h.split('Motivo:')[1]?.trim() || '';
+              } else if (h.includes('): ')) {
+                motivo = h.split('): ')[1]?.trim() || '';
               }
 
-              return { tipo, titulo, duracao, motivo, hora, textoOriginal: h };
-            });
+              paradasDetalhadas.push({
+                tipo: 'parada',
+                titulo: 'Parada Registrada',
+                duracao: duracao || '00:00:00',
+                duracaoMs: 0,
+                motivo,
+                hora
+              });
+            }
+          });
+
+          // Calculate total stopped time
+          const somaEventosMs = paradasDetalhadas.reduce((acc, p) => acc + (p.duracaoMs || 0), 0);
+          const tempoTotalParadoMs = Math.max(setup.deductionsMs || 0, somaEventosMs);
+          const tempoTotalParadoFormatado = formatarTempo(tempoTotalParadoMs);
 
           const totalParadasCount = paradasDetalhadas.length + (setup.paradaAtiva ? 1 : 0);
 
@@ -527,7 +599,7 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-mono">
-                        Tempo Total Parado: {formatarTempo(setup.deductionsMs || 0)}
+                        Tempo Total Parado: {tempoTotalParadoFormatado}
                       </span>
                       <button
                         type="button"

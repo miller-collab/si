@@ -7,7 +7,8 @@ import {
   Lock,
   Cog,
   Wifi,
-  CalendarClock
+  CalendarClock,
+  RefreshCw
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -17,6 +18,9 @@ interface NavbarProps {
   turnoAtivo: boolean;
   online: boolean;
   shiftScheduleStr: string;
+  segundosParaSync?: number;
+  sincronizando?: boolean;
+  aoSincronizarAgora?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -25,7 +29,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   qtdAtivos,
   turnoAtivo,
   online,
-  shiftScheduleStr
+  shiftScheduleStr,
+  segundosParaSync,
+  sincronizando,
+  aoSincronizarAgora
 }) => {
   return (
     <nav className="w-20 md:w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between py-5 shadow-2xl z-30 select-none">
@@ -121,6 +128,31 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <Lock className="w-4 h-4 shrink-0 text-slate-400" />
           <span className="hidden md:inline">Painel do Líder</span>
+        </button>
+
+        {/* Auto Sync & Manual Sync Button (Foto 2) */}
+        <button
+          type="button"
+          onClick={aoSincronizarAgora}
+          disabled={sincronizando}
+          className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 text-[11px] text-slate-300 hover:text-white transition group active:scale-95"
+          title="Clique para sincronizar agora ou aguarde o ciclo automático a cada 40s"
+        >
+          <div className="flex items-center gap-2">
+            <RefreshCw
+              className={`w-3.5 h-3.5 text-blue-400 ${
+                sincronizando ? 'animate-spin text-emerald-400' : 'group-hover:rotate-180 transition-transform duration-500'
+              }`}
+            />
+            <span className="font-semibold hidden md:inline">
+              {sincronizando ? 'Sincronizando...' : 'Auto-Sync (40s)'}
+            </span>
+          </div>
+          {segundosParaSync !== undefined && !sincronizando && (
+            <span className="font-mono text-[10px] text-blue-400 font-bold bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 hidden md:inline">
+              {segundosParaSync}s
+            </span>
+          )}
         </button>
 
         {/* Shift indicator */}

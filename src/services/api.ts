@@ -275,6 +275,31 @@ export class SetupApiService {
     if (json.data) this.setCache(json.data);
   }
 
+  public static async esvaziarConcluidos(senha?: string): Promise<void> {
+    const res = await fetch('/api/setup/esvaziar-concluidos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senha })
+    });
+    if (!res.ok) throw new Error('Falha ao esvaziar registros');
+    const json = await res.json();
+    if (json.data) this.setCache(json.data);
+  }
+
+  public static async carregarDados(backup: any, senha?: string): Promise<void> {
+    const res = await fetch('/api/setup/carregar-dados', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backup, senha })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Falha ao carregar dados');
+    }
+    const json = await res.json();
+    if (json.data) this.setCache(json.data);
+  }
+
   public static async resetDemo(): Promise<void> {
     const res = await fetch('/api/setup/reset-demo', {
       method: 'POST',

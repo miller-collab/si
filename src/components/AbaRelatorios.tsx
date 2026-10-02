@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   BarChart3,
   Filter,
@@ -8,25 +8,44 @@ import {
   Search,
   CheckCircle2,
   Calendar,
-  History
+  History,
+  Upload,
+  Database,
+  Trash2,
+  AlertTriangle,
+  X,
+  FileCheck
 } from 'lucide-react';
-import type { SetupConcluido } from '../types';
+import type { SetupConcluido, StoreData } from '../types';
 import { parseDataBR, formatarTempo } from '../utils/turno';
 
 interface AbaRelatoriosProps {
   concluidos: SetupConcluido[];
   aoAbrirHistorico: (historico: string, titulo: string) => void;
   aoImprimir: (filtrados: SetupConcluido[], filtroMaquina: string, filtroPeriodo: string) => void;
+  aoCarregarDados?: (backup: any) => Promise<void>;
+  aoEsvaziarConcluidos?: () => Promise<void>;
+  dadosCompletos?: StoreData | null;
 }
 
 export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
   concluidos,
   aoAbrirHistorico,
-  aoImprimir
+  aoImprimir,
+  aoCarregarDados,
+  aoEsvaziarConcluidos,
+  dadosCompletos
 }) => {
   const [filtroMaquina, setFiltroMaquina] = useState('todas');
   const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
   const [termoBusca, setTermoBusca] = useState('');
+
+  // Modals for Loading and Emptying Data (Foto 1)
+  const [modalEsvaziarAberto, setModalEsvaziarAberto] = useState(false);
+  const [modalCarregarAberto, setModalCarregarAberto] = useState(false);
+  const [backupParaCarregar, setBackupParaCarregar] = useState<any>(null);
+  const [processandoAcao, setProcessandoAcao] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Extract unique machines from completed setups
   const maquinasUnicas = useMemo(() => {
@@ -142,6 +161,67 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
     document.body.removeChild(link);
   };
 
+  // Full JSON Backup Export
+  const exportarBackupJSON = () => {
+    const backupObj = dadosCompletos || {
+      concluidos,
+      exportadoEm: new Date().toISOString()
+    };
+    const jsonStr = JSON.stringify(backupObj, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `backup_completo_cnc_${new Date().toISOString().substring(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // File picker handler for "Carregar Dados"
+  const handleArquivoSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        setBackupParaCarregar(parsed);
+        setModalCarregarAberto(true);
+      } catch (err) {
+        alert('O arquivo selecionado não é um arquivo JSON de backup válido.');
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleConfirmarCarregarDados = async () => {
+    if (!backupParaCarregar || !aoCarregarDados) return;
+    setProcessandoAcao(true);
+    try {
+      await aoCarregarDados(backupParaCarregar);
+      setModalCarregarAberto(false);
+      setBackupParaCarregar(null);
+    } finally {
+      setProcessandoAcao(false);
+    }
+  };
+
+  const handleConfirmarEsvaziar = async () => {
+    if (!aoEsvaziarConcluidos) return;
+    setProcessandoAcao(true);
+    try {
+      await aoEsvaziarConcluidos();
+      setModalEsvaziarAberto(false);
+    } finally {
+      setProcessandoAcao(false);
+    }
+  };
+
   const maxMinutos = Math.max(...chartData.map((d) => d.minutos), 60);
 
   return (
@@ -218,6 +298,43 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
           >
             <Download className="w-3.5 h-3.5 text-slate-400" />
             <span>CSV</span>
+          </button>
+
+          {/* Backup JSON Button */}
+          <button
+            onClick={exportarBackupJSON}
+            className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-blue-500/40 transition flex items-center gap-1.5 active:scale-95"
+            title="Baixar cópia de segurança de todos os registros em JSON"
+          >
+            <Database className="w-3.5 h-3.5 text-blue-400" />
+            <span>Backup</span>
+          </button>
+
+          {/* Carregar Dados Button (Foto 1) */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-emerald-500/40 transition flex items-center gap-1.5 active:scale-95"
+            title="Carregar ou restaurar arquivo de backup com dados anteriores (JSON)"
+          >
+            <Upload className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Carregar Dados</span>
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleArquivoSelecionado}
+            accept=".json,application/json"
+            className="hidden"
+          />
+
+          {/* Esvaziar Registros Button (Foto 1) */}
+          <button
+            onClick={() => setModalEsvaziarAberto(true)}
+            className="bg-red-600/15 hover:bg-red-600/25 text-red-400 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-red-500/30 transition flex items-center gap-1.5 active:scale-95"
+            title="Esvaziar histórico para começar do zero se o sistema estiver pesado"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+            <span>Esvaziar</span>
           </button>
         </div>
       </div>
@@ -372,6 +489,143 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Modal Esvaziar Registros (Foto 1) */}
+      {modalEsvaziarAberto && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-red-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2.5 text-red-400">
+                <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/30">
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                </div>
+                <h3 className="text-base font-black text-white">Esvaziar Registros Concluídos</h3>
+              </div>
+              <button
+                onClick={() => setModalEsvaziarAberto(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-3 leading-relaxed">
+              Deseja realmente esvaziar todos os registros concluídos para <strong>começar do zero</strong>?
+            </p>
+            <p className="text-[11px] text-slate-400 mb-5 leading-relaxed bg-slate-950 p-3 rounded-xl border border-slate-800">
+              💡 <strong>Dica de Segurança:</strong> Recomendamos baixar um <strong>Backup em JSON</strong> ou exportar a planilha <strong>CSV</strong> antes de esvaziar para guardar todo o histórico anterior com segurança.
+            </p>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={exportarBackupJSON}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-blue-300 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-700 transition"
+              >
+                <Database className="w-4 h-4 text-blue-400" />
+                <span>Baixar Backup Completo (JSON) Antes</span>
+              </button>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalEsvaziarAberto(false)}
+                  disabled={processandoAcao}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmarEsvaziar}
+                  disabled={processandoAcao}
+                  className="flex-1 bg-red-600 hover:bg-red-500 text-white font-black py-2.5 rounded-xl text-xs shadow-lg shadow-red-600/30 transition flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{processandoAcao ? 'Esvaziando...' : 'Sim, Esvaziar Tudo'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Carregar Dados (Foto 1) */}
+      {modalCarregarAberto && backupParaCarregar && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-emerald-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2.5 text-emerald-400">
+                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                  <Upload className="w-5 h-5 text-emerald-400" />
+                </div>
+                <h3 className="text-base font-black text-white">Carregar Dados de Backup</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setModalCarregarAberto(false);
+                  setBackupParaCarregar(null);
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-3 leading-relaxed">
+              O arquivo de backup foi lido com sucesso. Confira o conteúdo a ser restaurado:
+            </p>
+
+            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 mb-5 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Setups Concluídos no Arquivo:</span>
+                <span className="font-bold text-emerald-400 font-mono">
+                  {Array.isArray(backupParaCarregar.concluidos) ? backupParaCarregar.concluidos.length : 0}
+                </span>
+              </div>
+              {Array.isArray(backupParaCarregar.maquinas) && (
+                <div className="flex items-center justify-between text-slate-300">
+                  <span>Máquinas na Fila:</span>
+                  <span className="font-bold text-blue-400 font-mono">
+                    {backupParaCarregar.maquinas.length}
+                  </span>
+                </div>
+              )}
+              {Array.isArray(backupParaCarregar.preparadores) && (
+                <div className="flex items-center justify-between text-slate-300">
+                  <span>Preparadores Cadastrados:</span>
+                  <span className="font-bold text-amber-400 font-mono">
+                    {backupParaCarregar.preparadores.length}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalCarregarAberto(false);
+                  setBackupParaCarregar(null);
+                }}
+                disabled={processandoAcao}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarCarregarDados}
+                disabled={processandoAcao}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-2.5 rounded-xl text-xs shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-1.5"
+              >
+                <FileCheck className="w-4 h-4" />
+                <span>{processandoAcao ? 'Carregando...' : 'Confirmar e Carregar'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
