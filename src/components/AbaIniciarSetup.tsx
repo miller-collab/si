@@ -7,7 +7,8 @@ import {
   ArrowRight,
   CheckCircle2,
   Trash2,
-  X
+  X,
+  AlertCircle
 } from 'lucide-react';
 import type { Maquina } from '../types';
 
@@ -30,6 +31,7 @@ export const AbaIniciarSetup: React.FC<AbaIniciarSetupProps> = ({
   const [modalNovaMaquina, setModalNovaMaquina] = useState(false);
   const [novaMaquina, setNovaMaquina] = useState('');
   const [novaPeca, setNovaPeca] = useState('');
+  const [erroValidacao, setErroValidacao] = useState(false);
 
   // Password modal for Setup Externo (senha: 1152)
   const [modalSenhaExterno, setModalSenhaExterno] = useState<{ aberto: boolean; maquinaId: string | null }>({
@@ -47,10 +49,16 @@ export const AbaIniciarSetup: React.FC<AbaIniciarSetupProps> = ({
 
   const handleCriarMaquina = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!novaMaquina.trim()) return;
-    aoAdicionarMaquina(novaMaquina.trim(), novaPeca.trim() || '-');
+    const maqClean = novaMaquina.trim().toUpperCase();
+    const pecaClean = novaPeca.trim().toUpperCase();
+    if (!maqClean || !pecaClean) {
+      setErroValidacao(true);
+      return;
+    }
+    aoAdicionarMaquina(maqClean, pecaClean);
     setNovaMaquina('');
     setNovaPeca('');
+    setErroValidacao(false);
     setModalNovaMaquina(false);
   };
 
@@ -224,44 +232,80 @@ export const AbaIniciarSetup: React.FC<AbaIniciarSetupProps> = ({
             <h3 className="text-lg font-black text-white mb-4">Adicionar Máquina para Setup</h3>
             <form onSubmit={handleCriarMaquina} className="space-y-4">
               <div>
-                <label className="block text-slate-300 text-xs font-bold uppercase mb-1">
-                  Nome do Torno / Centro:
+                <label className="block text-slate-300 text-xs font-black uppercase mb-1 flex items-center justify-between">
+                  <span>Nome do Torno / Centro *</span>
+                  <span className="text-[10px] text-amber-400 font-bold lowercase tracking-normal">
+                    (obrigatório)
+                  </span>
                 </label>
                 <input
                   type="text"
                   value={novaMaquina}
-                  onChange={(e) => setNovaMaquina(e.target.value)}
+                  onChange={(e) => {
+                    setNovaMaquina(e.target.value);
+                    if (erroValidacao) setErroValidacao(false);
+                  }}
                   placeholder="Ex: TC21, CNC-02..."
                   required
                   autoFocus
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-blue-500 focus:outline-none"
+                  className={`w-full bg-slate-950 border rounded-xl p-3 text-white text-sm uppercase focus:outline-none transition ${
+                    erroValidacao && !novaMaquina.trim()
+                      ? 'border-red-500 focus:border-red-500'
+                      : 'border-slate-700 focus:border-blue-500'
+                  }`}
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 text-xs font-bold uppercase mb-1">
-                  Modelo da Peça a Produzir:
+                <label className="block text-slate-300 text-xs font-black uppercase mb-1 flex items-center justify-between">
+                  <span>Modelo da Peça a Produzir *</span>
+                  <span className="text-[10px] text-amber-400 font-bold lowercase tracking-normal">
+                    (obrigatório)
+                  </span>
                 </label>
                 <input
                   type="text"
                   value={novaPeca}
-                  onChange={(e) => setNovaPeca(e.target.value)}
-                  placeholder="Ex: BD1500, EIXO-35..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-blue-500 focus:outline-none"
+                  onChange={(e) => {
+                    setNovaPeca(e.target.value);
+                    if (erroValidacao) setErroValidacao(false);
+                  }}
+                  placeholder="Ex: BD1500, EIXO-35, PC5877..."
+                  required
+                  className={`w-full bg-slate-950 border rounded-xl p-3 text-white text-sm uppercase focus:outline-none transition ${
+                    erroValidacao && !novaPeca.trim()
+                      ? 'border-red-500 focus:border-red-500'
+                      : 'border-slate-700 focus:border-blue-500'
+                  }`}
                 />
               </div>
+
+              {erroValidacao && (!novaMaquina.trim() || !novaPeca.trim()) && (
+                <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/50 text-red-300 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                  <span>Todos os campos de informações precisam estar preenchidos!</span>
+                </div>
+              )}
 
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setModalNovaMaquina(false)}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-sm"
+                  onClick={() => {
+                    setModalNovaMaquina(false);
+                    setErroValidacao(false);
+                  }}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-sm transition"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-black py-2.5 rounded-xl text-sm"
+                  disabled={!novaMaquina.trim() || !novaPeca.trim()}
+                  className={`flex-1 font-black py-2.5 rounded-xl text-sm transition flex items-center justify-center gap-2 ${
+                    novaMaquina.trim() && novaPeca.trim()
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 cursor-pointer active:scale-95'
+                      : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                  }`}
                 >
                   Salvar
                 </button>

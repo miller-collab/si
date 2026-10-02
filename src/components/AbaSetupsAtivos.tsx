@@ -11,7 +11,10 @@ import {
   CheckSquare,
   Play,
   Check,
-  Pause
+  Pause,
+  History,
+  ChevronDown,
+  X
 } from 'lucide-react';
 import type { SetupAtivo, TurnoConfig } from '../types';
 import { formatarTempo } from '../utils/turno';
@@ -75,6 +78,9 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
 
   // Auto-save feedback indicators
   const [salvandoAuto, setSalvandoAuto] = useState<Record<string, boolean>>({});
+
+  // Collapsible stop history per card
+  const [historicoAberto, setHistoricoAberto] = useState<Record<string, boolean>>({});
 
   // Mandatory motive modal when closing a stop
   const [modalFecharParada, setModalFecharParada] = useState<{
@@ -333,6 +339,43 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
 
           const temAlmoco = setup.historico.some((h) => h.includes('Almoço'));
 
+          // Parse stop & deduction history
+          const paradasDetalhadas = (setup.historico || [])
+            .filter((h) => h.includes('Parada finalizada') || h.includes('Café') || h.includes('Almoço'))
+            .map((h) => {
+              let tipo: 'parada' | 'cafe' | 'almoco' = 'parada';
+              let titulo = 'Parada Técnica';
+              let duracao = '';
+              let motivo = '';
+              let hora = '';
+
+              const horaMatch = h.match(/\[(.*?)\]/);
+              if (horaMatch) hora = horaMatch[1];
+
+              if (h.includes('Café')) {
+                tipo = 'cafe';
+                titulo = 'Intervalo de Café';
+                duracao = '00:15:00';
+              } else if (h.includes('Almoço')) {
+                tipo = 'almoco';
+                titulo = 'Intervalo de Almoço';
+                duracao = '01:30:00';
+              } else if (h.includes('Parada finalizada')) {
+                tipo = 'parada';
+                titulo = 'Parada com Motivo';
+                const duracaoMatch = h.match(/\((.*?)\)/);
+                if (duracaoMatch) duracao = duracaoMatch[1];
+                const motivoParts = h.split('): ');
+                if (motivoParts.length > 1) {
+                  motivo = motivoParts.slice(1).join('): ');
+                }
+              }
+
+              return { tipo, titulo, duracao, motivo, hora, textoOriginal: h };
+            });
+
+          const totalParadasCount = paradasDetalhadas.length + (setup.paradaAtiva ? 1 : 0);
+
           return (
             <div
               key={id}
@@ -427,6 +470,26 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
                     </button>
                   )}
 
+                  {/* Button to view history of stops (Foto 1) */}
+                  <button
+                    type="button"
+                    onClick={() => setHistoricoAberto((prev) => ({ ...prev, [id]: !prev[id] }))}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition border flex items-center gap-1.5 active:scale-95 ${
+                      historicoAberto[id]
+                        ? 'bg-blue-600/30 text-blue-300 border-blue-500/60 shadow-lg shadow-blue-500/20'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-700'
+                    }`}
+                    title="Ver histórico e tempos das paradas deste setup"
+                  >
+                    <History className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Histórico de Paradas ({totalParadasCount})</span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        historicoAberto[id] ? 'rotate-180 text-blue-400' : 'text-slate-400'
+                      }`}
+                    />
+                  </button>
+
                   {/* PARADA Button with discreet real-time stopwatch right beside it */}
                   <div className="ml-auto flex items-center gap-2">
                     {setup.paradaAtiva && (
@@ -449,6 +512,91 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
                       <span>{setup.paradaAtiva ? 'ENCERRAR PARADA' : 'PARADA'}</span>
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Collapsible History Box (Foto 1 - Click to view, click again to close) */}
+              {historicoAberto[id] && (
+                <div className="mb-6 p-4 rounded-xl bg-slate-950 border border-blue-500/40 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-800 gap-2">
+                    <div className="flex items-center gap-2">
+                      <History className="w-4 h-4 text-blue-400" />
+                      <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                        Histórico de Paradas & Deduções — {setup.maquina}
+                      </h4>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-mono">
+                        Tempo Total Parado: {formatarTempo(setup.deductionsMs || 0)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setHistoricoAberto((prev) => ({ ...prev, [id]: false }))}
+                        className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 text-xs font-bold flex items-center gap-1 transition"
+                        title="Desclicar / Fechar histórico"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Fechar (Desclicar)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Current ongoing stop if active */}
+                  {setup.paradaAtiva && (
+                    <div className="mb-3 p-3 rounded-lg bg-red-950/70 border border-red-500/60 flex items-center justify-between text-xs text-red-200 animate-pulse">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                        <span className="font-bold">PARADA EM ANDAMENTO AGORA:</span>
+                        <span className="text-slate-300">Tempo de parada correndo</span>
+                      </div>
+                      <span className="font-mono font-black text-red-400 text-sm">{stopTimeStr}</span>
+                    </div>
+                  )}
+
+                  {/* List of stops / deductions */}
+                  {paradasDetalhadas.length === 0 && !setup.paradaAtiva ? (
+                    <p className="text-xs text-slate-500 py-3 text-center italic">
+                      Nenhuma parada ou desconto registrado neste setup até o momento.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {paradasDetalhadas.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs hover:border-slate-700 transition"
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <span className="p-1.5 rounded-md bg-slate-800 text-slate-400 shrink-0 mt-0.5">
+                              {item.tipo === 'cafe' ? (
+                                <Coffee className="w-3.5 h-3.5 text-yellow-400" />
+                              ) : item.tipo === 'almoco' ? (
+                                <Utensils className="w-3.5 h-3.5 text-orange-400" />
+                              ) : (
+                                <Pause className="w-3.5 h-3.5 text-red-400" />
+                              )}
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-white">{item.titulo}</span>
+                                <span className="text-[10px] text-slate-500">{item.hora}</span>
+                              </div>
+                              {item.motivo && (
+                                <p className="text-[11px] text-slate-300 mt-0.5 leading-snug">
+                                  <strong className="text-slate-400">Motivo:</strong> {item.motivo}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {item.duracao && (
+                            <span className="font-mono font-black text-xs px-2.5 py-1 rounded bg-slate-950 border border-slate-800 text-amber-400 shrink-0">
+                              +{item.duracao}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

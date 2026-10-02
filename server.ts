@@ -581,8 +581,9 @@ async function startServer() {
 
   app.post('/api/setup/adicionar-maquina', (req, res) => {
     const { maquina, peca } = req.body;
-    if (!maquina) return res.status(400).json({ error: 'Nome da máquina obrigatório' });
-    store.adicionarMaquina(maquina, peca || '-');
+    if (!maquina || !maquina.trim()) return res.status(400).json({ error: 'Nome da máquina obrigatório' });
+    if (!peca || !peca.trim() || peca.trim() === '-') return res.status(400).json({ error: 'Modelo da peça obrigatório' });
+    store.adicionarMaquina(maquina.trim().toUpperCase(), peca.trim().toUpperCase());
     res.json({ sucesso: true, data: store.getData() });
   });
 

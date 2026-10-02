@@ -112,8 +112,8 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
 
   const handleCriarMaq = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!novaMaq.trim()) return;
-    await aoAdicionarMaquina(novaMaq.trim(), novaPeca.trim() || '-');
+    if (!novaMaq.trim() || !novaPeca.trim()) return;
+    await aoAdicionarMaquina(novaMaq.trim().toUpperCase(), novaPeca.trim().toUpperCase());
     setNovaMaq('');
     setNovaPeca('');
   };
@@ -393,19 +393,26 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
               type="text"
               value={novaMaq}
               onChange={(e) => setNovaMaq(e.target.value)}
-              placeholder="Máq (ex: TC22)"
+              placeholder="Máq (ex: TC22) *"
+              required
               className="col-span-2 bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white uppercase focus:border-blue-500"
             />
             <input
               type="text"
               value={novaPeca}
               onChange={(e) => setNovaPeca(e.target.value)}
-              placeholder="Peça (ex: EIXO-45)"
+              placeholder="Peça (ex: EIXO-45) *"
+              required
               className="col-span-2 bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white uppercase focus:border-blue-500"
             />
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs flex items-center justify-center transition"
+              disabled={!novaMaq.trim() || !novaPeca.trim()}
+              className={`rounded-xl text-xs flex items-center justify-center transition font-bold ${
+                novaMaq.trim() && novaPeca.trim()
+                  ? 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer'
+                  : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+              }`}
               title="Adicionar à fila"
             >
               <Plus className="w-4 h-4" />

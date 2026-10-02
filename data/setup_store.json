@@ -1,16 +1,17 @@
 {
-  "maquinas": [],
+  "maquinas": [
+    {
+      "id": "1790966178690",
+      "maquina": "TC11",
+      "peca": "1555",
+      "setupExternoPronto": false
+    }
+  ],
   "preparadores": [
     "GABRIEL",
     "CAIO",
     "IGOR",
-    "JONAS",
-    "MILLER",
-    "LUCAS",
-    "RAFAEL",
-    "MATHEUS",
-    "ADRIANO",
-    "MARCELO"
+    "MILLER"
   ],
   "tarefas1": [
     "GUARDAR PGMS E FOTOS DO MODELO ATUAL NA PASTA DRIVE CORRETA AO INICIAR O NOVO SETUP",
@@ -55,7 +56,61 @@
     "inicio": "07:00",
     "fim": "17:00"
   },
-  "setupsAtivos": {},
+  "setupsAtivos": {
+    "setup_1790965241412": {
+      "id": "setup_1790965241412",
+      "rowId": "1790965172369",
+      "maquina": "TC12",
+      "peca": "bd1152",
+      "modeloAnterior": "Não Informado",
+      "prep1Val": "GABRIEL",
+      "prep2Val": "CAIO",
+      "dataInicio": "02/10/2026 às 15:20",
+      "inicioMs": 1790965240886,
+      "lastTick": 1790965251889,
+      "tempoDecorridoMs": 9907,
+      "deductionsMs": 0,
+      "paradaAtiva": false,
+      "historico": [
+        "[02/10/2026 às 15:20] Início do setup"
+      ],
+      "eventos": [],
+      "checksStateParte1": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "checksStateParte2": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "checksStatePendencias": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "setupRegistrado": false,
+      "updatedAt": 1790965251889
+    }
+  },
   "concluidos": [
     {
       "id": "conc_1",
