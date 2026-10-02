@@ -1,0 +1,89 @@
+{
+  "maquinas": [],
+  "preparadores": [
+    "GABRIEL",
+    "CAIO",
+    "IGOR",
+    "JONAS",
+    "MILLER",
+    "LUCAS",
+    "RAFAEL",
+    "MATHEUS",
+    "ADRIANO",
+    "MARCELO"
+  ],
+  "tarefas1": [
+    "GUARDAR PGMS E FOTOS DO MODELO ATUAL NA PASTA DRIVE CORRETA AO INICIAR O NOVO SETUP",
+    "VERIFICAR A NECESSIDADE DE LIMPAR O CAVACO (MATERIAL DIFERENTE)",
+    "TROCAR PINÇAS ALIMENTADOR",
+    "AJUSTAR APERTO DAS BUCHAS GUIAS",
+    "AJUSTAR PARAMETROS DO ALIMENTADOR"
+  ],
+  "tarefas2": [
+    "TROCAR AS PINÇAS SE NECESSÁRIO",
+    "AJUSTAR APERTO DAS PINÇAS",
+    "GUARDAR PGMS ANTIGO PEN DRIVE E COLOCAR O NOVO",
+    "ALOCAR E FIXAR AS FERRAMENTAS CONFORME PGM ATUAL (AJUSTAR PGM E FERRAMENTAS)",
+    "PRESSET DAS FERRAMENTAS",
+    "SIMULAR NO VAZIO COM MUITA ATENÇÃO PARA ELIMINAR COLISÃO",
+    "AJUSTAR A POSIÇÃO DOS OLEOS",
+    "FAZER UMA PEÇA BOA CONFORME DESENHO",
+    "SOLTAR A MAQUINA PARA PRODUZIR ( ALERTAR INSPETOR SOBRE ALGUM DETALHE ESPECIAL NA PEÇA)"
+  ],
+  "tarefasPendencias": [
+    "FAZER VIDA UTIL DAS FERRAMENTAS",
+    "FINALIZAR REGISTRO ANTIGO E ABRIR O NOVO",
+    "FAZER OU AJUSTAR A FOLHA DE PROCESSO",
+    "SOLICITAR BARRAS PARA A PRODUÇÃO DO LOTE",
+    "SOLICITAR ETIQUETA DO NOVO MODELO",
+    "ANOTAR AS FERRAMENTAS PARA CORREÇÃO NO QUADRO",
+    "ATUALIZAR A PLANILHA DE PRODUÇÃO DO PCP NO SISTEMA COMO FINALIZADO",
+    "COLOCAR A QUANTIDADE DO LOTE A SER PRODUZIDO NA MAQUINA E OS DESENHOS NOS LOCAIS CORRETOS",
+    "CONFERIR O TEMPO DE ACORDO COM O PADRÃO ( CASO DIVERGENTE COMUNICAR O LIDER)",
+    "ASSINAR O REGISTRO DO PREPARADOR 1",
+    "GUARDAR E ORGANIZAR FERRAMENTAS / CALIBRES / PEÇAS MODELO",
+    "SINALIZAR INICIO DE PRODUÇÃO NA PLANILHA PCP"
+  ],
+  "turnoConfig": {
+    "dias": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "inicio": "07:00",
+    "fim": "17:00"
+  },
+  "setupsAtivos": {},
+  "concluidos": [
+    {
+      "id": "conc_1",
+      "data": "01/10/2026 16:45",
+      "timestamp": 1790870902596,
+      "maquina": "TC18",
+      "peca": "AL1526X0 (TRYOUT)",
+      "modeloAnterior": "PC600",
+      "prep1": "GABRIEL",
+      "prep2": "IGOR",
+      "tempo": "02:47:35",
+      "tempoMs": 10055000,
+      "historico": "[01/10/2026 14:00] Início TC18 | [01/10/2026 15:00] Café (-15m) | [01/10/2026 15:20] Parada: Ajuste de ferramenta especial e conferência de folgas",
+      "pendenciasConcluidas": true
+    },
+    {
+      "id": "conc_2",
+      "data": "01/10/2026 12:20",
+      "timestamp": 1790856502596,
+      "maquina": "TC03",
+      "peca": "A2016024",
+      "modeloAnterior": "BD1402",
+      "prep1": "GABRIEL",
+      "prep2": "CAIO",
+      "tempo": "01:41:00",
+      "tempoMs": 6060000,
+      "historico": "[01/10/2026 10:40] Início TC03 | [01/10/2026 11:30] Parada: Troca de pinças do alimentador",
+      "pendenciasConcluidas": true
+    }
+  ]
+}

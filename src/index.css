@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@keyframes piscarVermelho {
+  0% {
+    background-color: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    background-color: #991b1b;
+    box-shadow: 0 0 25px rgba(239, 68, 68, 1);
+  }
+  100% {
+    background-color: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+  }
+}
+
+.piscar-alerta {
+  animation: piscarVermelho 1s infinite ease-in-out;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* ESTILOS ESPECÍFICOS PARA O RELATÓRIO PDF / IMPRESSÃO LIMPA */
+@media print {
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  /* Esconde toda a interface comum */
+  body > * {
+    display: none !important;
+  }
+  
+  /* Exibe exclusivamente o elemento de impressão */
+  #area-impressao-gestor,
+  #area-impressao-dashboard,
+  .print-area-active {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+}

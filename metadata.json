@@ -1,0 +1,6 @@
+{
+  "name": "Setup Interno CNC",
+  "description": "Sistema industrial centralizado de controle e sincronização de setups internos, paradas, checklists e painel do gestor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
