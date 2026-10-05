@@ -21,27 +21,58 @@ export function estaNoTurno(dataObj: Date, config: TurnoConfig): boolean {
 }
 
 export function calcularTempoValidoTurno(startMs: number, endMs: number, config: TurnoConfig): number {
-  if (!startMs || endMs <= startMs) return 0;
-  const diff = endMs - startMs;
-  
-  // Se a diferença for bem curta (menos de 2 minutos), faz checagem simples
-  if (diff <= 120000) {
-    if (estaNoTurno(new Date(endMs), config)) return diff;
-    return 0;
+  if (!startMs || endMs <= startMs || !config || !config.dias || config.dias.length === 0) {
+    return Math.max(0, endMs - startMs);
   }
 
-  let tempoValido = 0;
-  let cursorMs = startMs;
-  // Avança de minuto em minuto para calcular precisamente dentro dos turnos
-  while (cursorMs < endMs) {
-    const passoMs = Math.min(60000, endMs - cursorMs);
-    const d = new Date(cursorMs);
-    if (estaNoTurno(d, config)) {
-      tempoValido += passoMs;
+  const [hIni, mIni] = (config.inicio || '07:00').split(':').map(Number);
+  const [hFim, mFim] = (config.fim || '17:00').split(':').map(Number);
+  const isOvernight = hIni > hFim || (hIni === hFim && mIni > mFim);
+
+  let totalMs = 0;
+
+  const curDate = new Date(startMs);
+  curDate.setHours(0, 0, 0, 0);
+
+  const finalDate = new Date(endMs);
+  finalDate.setHours(23, 59, 59, 999);
+
+  while (curDate.getTime() <= finalDate.getTime()) {
+    const y = curDate.getFullYear();
+    const m = curDate.getMonth();
+    const d = curDate.getDate();
+    const diaSemana = curDate.getDay().toString();
+
+    if (config.dias.includes(diaSemana)) {
+      if (!isOvernight) {
+        const winStart = new Date(y, m, d, hIni, mIni, 0, 0).getTime();
+        const winEnd = new Date(y, m, d, hFim, mFim, 0, 0).getTime();
+        const actStart = Math.max(startMs, winStart);
+        const actEnd = Math.min(endMs, winEnd);
+        if (actEnd > actStart) {
+          totalMs += (actEnd - actStart);
+        }
+      } else {
+        // Overnight shift: segment 1 on day D
+        const win1Start = new Date(y, m, d, hIni, mIni, 0, 0).getTime();
+        const win1End = new Date(y, m, d, 23, 59, 59, 999).getTime() + 1;
+        const a1 = Math.max(startMs, win1Start);
+        const b1 = Math.min(endMs, win1End);
+        if (b1 > a1) totalMs += (b1 - a1);
+
+        // Overnight shift: segment 2 on day D + 1
+        const win2Start = new Date(y, m, d + 1, 0, 0, 0, 0).getTime();
+        const win2End = new Date(y, m, d + 1, hFim, mFim, 0, 0).getTime();
+        const a2 = Math.max(startMs, win2Start);
+        const b2 = Math.min(endMs, win2End);
+        if (b2 > a2) totalMs += (b2 - a2);
+      }
     }
-    cursorMs += passoMs;
+
+    curDate.setDate(curDate.getDate() + 1);
   }
-  return tempoValido;
+
+  return totalMs;
 }
 
 export function formatarTempo(ms: number): string {

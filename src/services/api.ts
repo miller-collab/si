@@ -49,7 +49,13 @@ export class SetupApiService {
 
   public static async fetchSync(): Promise<StoreData> {
     try {
-      const res = await fetch('/api/setup/sync');
+      const res = await fetch(`/api/setup/sync?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache'
+        }
+      });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data: StoreData = await res.json();
       this.setCache(data);

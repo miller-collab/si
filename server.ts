@@ -92,7 +92,7 @@ const INITIAL_CONCLUIDOS: SetupConcluido[] = [
     prep2: 'IGOR',
     tempo: '02:47:35',
     tempoMs: 2 * 3600 * 1000 + 47 * 60 * 1000 + 35 * 1000,
-    historico: '[01/10/2026 14:00] Início TC18 | [01/10/2026 15:00] Café (-15m) | [01/10/2026 15:20] Parada: Ajuste de ferramenta especial e conferência de folgas',
+    historico: '[01/10/2026 14:00] Início TC18 | [15:00 às 15:15] Café (-15m) | [15:20 às 15:45] Parada (00:25:00): Ajuste de ferramenta especial e conferência de folgas | [01/10/2026 16:45] Fim do Setup (Liberado)',
     pendenciasConcluidas: true
   },
   {
@@ -106,7 +106,7 @@ const INITIAL_CONCLUIDOS: SetupConcluido[] = [
     prep2: 'CAIO',
     tempo: '01:41:00',
     tempoMs: 1 * 3600 * 1000 + 41 * 60 * 1000,
-    historico: '[01/10/2026 10:40] Início TC03 | [01/10/2026 11:30] Parada: Troca de pinças do alimentador',
+    historico: '[01/10/2026 10:40] Início TC03 | [11:30 às 11:50] Parada (00:20:00): Troca de pinças do alimentador | [01/10/2026 12:20] Fim do Setup (Liberado)',
     pendenciasConcluidas: true
   }
 ];
@@ -352,10 +352,12 @@ class StoreManager {
       }
 
       const duracaoFormatada = formatarTempoStr(duracaoMs);
-      setup.historico.push(`[${strDH}] Parada encerrada (${duracaoFormatada}) - Motivo: ${motivoObrigatorio.trim()}`);
+      const horaIni = new Date(setup.paradaAtual.inicioMs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const horaFim = dh.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      setup.historico.push(`[${horaIni} às ${horaFim}] Parada (${duracaoFormatada}): ${motivoObrigatorio.trim()}`);
       setup.paradaAtual = undefined;
     } else {
-      setup.historico.push(`[${strDH}] Parada encerrada - Motivo: ${motivoObrigatorio.trim()}`);
+      setup.historico.push(`[${strDH}] Parada encerrada: ${motivoObrigatorio.trim()}`);
     }
 
     setup.updatedAt = Date.now();
@@ -518,6 +520,14 @@ const store = new StoreManager();
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
+
+  // Never cache API responses across multiple tablets
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
+  });
 
   // API Endpoints
   app.get('/api/setup/sync', (req, res) => {

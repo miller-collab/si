@@ -37,6 +37,13 @@
   background: #475569;
 }
 
+/* ESCONDE A ÁREA DE IMPRESSÃO NA TELA NORMAL */
+#area-impressao-gestor,
+#area-impressao-dashboard,
+.print-area-active {
+  display: none !important;
+}
+
 /* ESTILOS ESPECÍFICOS PARA O RELATÓRIO PDF / IMPRESSÃO LIMPA */
 @media print {
   html, body {

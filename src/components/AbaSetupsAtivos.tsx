@@ -17,7 +17,7 @@ import {
   X
 } from 'lucide-react';
 import type { SetupAtivo, TurnoConfig } from '../types';
-import { formatarTempo } from '../utils/turno';
+import { formatarTempo, calcularTempoValidoTurno } from '../utils/turno';
 
 interface AbaSetupsAtivosProps {
   setupsAtivos: Record<string, SetupAtivo>;
@@ -308,9 +308,9 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
             displayTime = setup.tempoFormatado || formatarTempo(setup.tempoSetupMs || setup.tempoDecorridoMs || 0);
             tempoLiquidoMs = setup.tempoSetupMs || setup.tempoDecorridoMs || 0;
           } else {
-            // Live real-time elapsed time from exact start timestamp
+            // Live real-time elapsed time calculated strictly within configured shift hours!
             const start = setup.inicioMs || agora;
-            const bruto = Math.max(0, agora - start);
+            const bruto = calcularTempoValidoTurno(start, agora, turnoConfig);
             tempoLiquidoMs = Math.max(0, bruto - (setup.deductionsMs || 0));
             displayTime = formatarTempo(tempoLiquidoMs);
           }
@@ -318,7 +318,7 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
           // Stop timer calculation
           let tempoParadaAtualMs = 0;
           if (setup.paradaAtiva && setup.paradaAtual) {
-            tempoParadaAtualMs = Math.max(0, agora - setup.paradaAtual.inicioMs);
+            tempoParadaAtualMs = calcularTempoValidoTurno(setup.paradaAtual.inicioMs, agora, turnoConfig);
           }
           const stopTimeStr = formatarTempo(tempoParadaAtualMs);
 
@@ -499,7 +499,7 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
                   </div>
                 </div>
 
-                {/* Big Chronometer (Live ticking in real time) */}
+                {/* Big Chronometer (Live ticking in real time, static when shift is paused) */}
                 <div className="text-left sm:text-right">
                   <div
                     className={`text-5xl font-black font-mono tracking-tight tabular-nums ${
@@ -507,11 +507,19 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
                         ? 'text-purple-400'
                         : setup.paradaAtiva
                         ? 'text-red-400'
+                        : !turnoAtivo
+                        ? 'text-amber-400'
                         : 'text-emerald-400'
                     }`}
                   >
                     {displayTime}
                   </div>
+                  {!isLiberada && !turnoAtivo && (
+                    <div className="text-[10px] font-bold text-amber-400 uppercase tracking-widest mt-0.5 flex items-center sm:justify-end gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      Turno Pausado (Tempo Estático)
+                    </div>
+                  )}
                   <div className="text-[11px] font-semibold text-slate-500 mt-1 flex items-center sm:justify-end gap-1.5">
                     <Calendar className="w-3 h-3 text-slate-600" />
                     <span>Início: {setup.dataInicio}</span>

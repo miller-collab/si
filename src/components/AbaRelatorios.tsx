@@ -14,7 +14,9 @@ import {
   Trash2,
   AlertTriangle,
   X,
-  FileCheck
+  FileCheck,
+  Lock,
+  KeyRound
 } from 'lucide-react';
 import type { SetupConcluido, StoreData } from '../types';
 import { parseDataBR, formatarTempo } from '../utils/turno';
@@ -39,6 +41,12 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
   const [filtroMaquina, setFiltroMaquina] = useState('todas');
   const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
   const [termoBusca, setTermoBusca] = useState('');
+
+  // Password Protection for Gestor Actions (Backup, Carregar Dados, Esvaziar)
+  const [modalSenhaAberto, setModalSenhaAberto] = useState(false);
+  const [acaoPendente, setAcaoPendente] = useState<'backup' | 'carregar' | 'esvaziar' | null>(null);
+  const [senhaInput, setSenhaInput] = useState('');
+  const [erroSenha, setErroSenha] = useState(false);
 
   // Modals for Loading and Emptying Data (Foto 1)
   const [modalEsvaziarAberto, setModalEsvaziarAberto] = useState(false);
@@ -222,6 +230,35 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
     }
   };
 
+  // Gestor Password Verification Handler
+  const solicitarSenhaGestor = (acao: 'backup' | 'carregar' | 'esvaziar') => {
+    setAcaoPendente(acao);
+    setSenhaInput('');
+    setErroSenha(false);
+    setModalSenhaAberto(true);
+  };
+
+  const handleValidarSenhaGestor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (senhaInput.trim() === '8619' || senhaInput.trim() === '5211') {
+      const acao = acaoPendente;
+      setModalSenhaAberto(false);
+      setSenhaInput('');
+      setErroSenha(false);
+      setAcaoPendente(null);
+
+      if (acao === 'backup') {
+        exportarBackupJSON();
+      } else if (acao === 'carregar') {
+        fileInputRef.current?.click();
+      } else if (acao === 'esvaziar') {
+        setModalEsvaziarAberto(true);
+      }
+    } else {
+      setErroSenha(true);
+    }
+  };
+
   const maxMinutos = Math.max(...chartData.map((d) => d.minutos), 60);
 
   return (
@@ -300,22 +337,24 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
             <span>CSV</span>
           </button>
 
-          {/* Backup JSON Button */}
+          {/* Backup JSON Button (Protegido por Senha do Gestor) */}
           <button
-            onClick={exportarBackupJSON}
-            className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-blue-500/40 transition flex items-center gap-1.5 active:scale-95"
-            title="Baixar cópia de segurança de todos os registros em JSON"
+            onClick={() => solicitarSenhaGestor('backup')}
+            className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-blue-500/40 transition flex items-center gap-1.5 active:scale-95 shadow-sm"
+            title="Ação do Gestor: Baixar cópia de segurança de todos os registros em JSON"
           >
+            <Lock className="w-3 h-3 text-amber-400" />
             <Database className="w-3.5 h-3.5 text-blue-400" />
             <span>Backup</span>
           </button>
 
-          {/* Carregar Dados Button (Foto 1) */}
+          {/* Carregar Dados Button (Protegido por Senha do Gestor) */}
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-emerald-500/40 transition flex items-center gap-1.5 active:scale-95"
-            title="Carregar ou restaurar arquivo de backup com dados anteriores (JSON)"
+            onClick={() => solicitarSenhaGestor('carregar')}
+            className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-emerald-500/40 transition flex items-center gap-1.5 active:scale-95 shadow-sm"
+            title="Ação do Gestor: Carregar ou restaurar arquivo de backup com dados anteriores (JSON)"
           >
+            <Lock className="w-3 h-3 text-amber-400" />
             <Upload className="w-3.5 h-3.5 text-emerald-400" />
             <span>Carregar Dados</span>
           </button>
@@ -327,12 +366,13 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
             className="hidden"
           />
 
-          {/* Esvaziar Registros Button (Foto 1) */}
+          {/* Esvaziar Registros Button (Protegido por Senha do Gestor) */}
           <button
-            onClick={() => setModalEsvaziarAberto(true)}
-            className="bg-red-600/15 hover:bg-red-600/25 text-red-400 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-red-500/30 transition flex items-center gap-1.5 active:scale-95"
-            title="Esvaziar histórico para começar do zero se o sistema estiver pesado"
+            onClick={() => solicitarSenhaGestor('esvaziar')}
+            className="bg-red-600/15 hover:bg-red-600/25 text-red-400 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-red-500/30 transition flex items-center gap-1.5 active:scale-95 shadow-sm"
+            title="Ação do Gestor: Esvaziar histórico para começar do zero"
           >
+            <Lock className="w-3 h-3 text-amber-400" />
             <Trash2 className="w-3.5 h-3.5 text-red-400" />
             <span>Esvaziar</span>
           </button>
@@ -623,6 +663,88 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
                 <span>{processandoAcao ? 'Carregando...' : 'Confirmar e Carregar'}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Senha do Gestor para Backup / Carregar Dados / Esvaziar */}
+      {modalSenhaAberto && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-amber-500/50 rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2.5 text-amber-400">
+                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <Lock className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">Acesso do Gestor</h3>
+                  <span className="text-[10px] text-amber-400/90 font-bold uppercase tracking-wider block">
+                    {acaoPendente === 'backup' && 'Download de Backup'}
+                    {acaoPendente === 'carregar' && 'Restauração de Dados'}
+                    {acaoPendente === 'esvaziar' && 'Esvaziar Histórico'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalSenhaAberto(false);
+                  setSenhaInput('');
+                  setErroSenha(false);
+                  setAcaoPendente(null);
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+              Esta ação é restrita e não pode ser executada por colaboradores. Digite a senha do gestor para autorizar:
+            </p>
+
+            <form onSubmit={handleValidarSenhaGestor} className="space-y-4">
+              <div>
+                <input
+                  type="password"
+                  value={senhaInput}
+                  onChange={(e) => {
+                    setSenhaInput(e.target.value);
+                    if (erroSenha) setErroSenha(false);
+                  }}
+                  placeholder="Digite a senha do gestor..."
+                  autoFocus
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-center text-white text-base font-mono tracking-widest focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+                {erroSenha && (
+                  <p className="text-[11px] font-bold text-red-400 text-center mt-2 animate-shake">
+                    Senha incorreta! Apenas o gestor pode liberar.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalSenhaAberto(false);
+                    setSenhaInput('');
+                    setErroSenha(false);
+                    setAcaoPendente(null);
+                  }}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs shadow-lg shadow-amber-500/30 transition flex items-center justify-center gap-1.5 uppercase tracking-wider"
+                >
+                  <KeyRound className="w-4 h-4 text-slate-950" />
+                  <span>Liberar</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -13,6 +13,7 @@ import type {
 } from './types';
 import { SetupApiService } from './services/api';
 import { estaNoTurno, formatarTempo } from './utils/turno';
+import { baixarRelatorioDashboardPdf, baixarRelatorioGestorPdf } from './utils/pdfGestor';
 
 import { Navbar } from './components/Navbar';
 import { AbaIniciarSetup } from './components/AbaIniciarSetup';
@@ -412,7 +413,7 @@ export default function App() {
 
     const mediaSeg = filtrados.length > 0 ? Math.floor(totalSegundos / filtrados.length) : 0;
 
-    setDadosPrintDashboard({
+    baixarRelatorioDashboardPdf({
       filtrados,
       filtroMaquina: filtroMaquina === 'todas' ? 'Todas as Máquinas' : filtroMaquina,
       filtroPeriodo: filtroPeriodo === 'todos' ? 'Todos os Registros' : filtroPeriodo === 'semana' ? 'Últimos 7 Dias' : `Mês ${filtroPeriodo}`,
@@ -420,11 +421,7 @@ export default function App() {
       kpiMedia: formatarTempo(mediaSeg * 1000),
       top10Paradas
     });
-
-    setModoImpressao('dashboard');
-    setTimeout(() => {
-      window.print();
-    }, 200);
+    showToast('PDF em Preto e Branco gerado! Verifique seus Downloads.');
   };
 
   const handleImprimirGestor = (
@@ -467,7 +464,7 @@ export default function App() {
 
     const mediaSeg = filtrados.length > 0 ? Math.floor(totalSegundos / filtrados.length) : 0;
 
-    setDadosPrintGestor({
+    baixarRelatorioGestorPdf({
       filtrados,
       colabNome,
       periodoTexto,
@@ -480,11 +477,7 @@ export default function App() {
       setupMenorTempo,
       setupMaiorTempo
     });
-
-    setModoImpressao('gestor');
-    setTimeout(() => {
-      window.print();
-    }, 200);
+    showToast('PDF Gerencial em Preto e Branco gerado com sucesso!');
   };
 
   const qtdAtivos = Object.keys(storeData.setupsAtivos || {}).length;

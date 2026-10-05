@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import type { SetupConcluido } from '../types';
 import { parseDataBR, formatarTempo } from '../utils/turno';
+import { ModalPdfPronto } from './ModalPdfPronto';
+import { baixarRelatorioGestorPdf, extrairDetalhesCompletosSetup, type DadosRelatorioGestor } from '../utils/pdfGestor';
 
 interface AbaPainelGestorProps {
   concluidos: SetupConcluido[];
@@ -43,6 +45,10 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [buscaExecutada, setBuscaExecutada] = useState(false);
+
+  // PDF Modal State
+  const [modalPdfAberto, setModalPdfAberto] = useState(false);
+  const [dadosPdfModal, setDadosPdfModal] = useState<DadosRelatorioGestor | null>(null);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,13 +215,33 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
       periodoTexto = `Até ${dataFim.split('-').reverse().join('/')}`;
     }
 
-    aoImprimirGestor(
+    if (filtrados.length === 0) {
+      alert('Não há registros para o período selecionado.');
+      return;
+    }
+
+    const colabNome = colaborador === 'todos' ? 'Todos os Colaboradores' : colaborador;
+
+    const dadosRelatorio: DadosRelatorioGestor = {
       filtrados,
-      colaborador === 'todos' ? 'Todos os Colaboradores' : colaborador,
+      colabNome,
       periodoTexto,
-      analise.top3Demorados,
-      analise.top10Paradas
-    );
+      top3: analise.top3Demorados,
+      top10Paradas: analise.top10Paradas,
+      kpiTotal: analise.totalSetups,
+      kpiMedia: analise.mediaTempoStr,
+      menorTempoStr: analise.menorTempoStr,
+      maiorTempoStr: analise.maiorTempoStr,
+      setupMenorTempo: analise.setupMenorTempo,
+      setupMaiorTempo: analise.setupMaiorTempo
+    };
+
+    // 1. Immediately triggers native browser "Salvar Como" / download of clean B&W PDF
+    baixarRelatorioGestorPdf(dadosRelatorio);
+
+    // 2. Opens friendly confirmation modal for re-download or direct print tab
+    setDadosPdfModal(dadosRelatorio);
+    setModalPdfAberto(true);
   };
 
   // Locked Gate
@@ -509,55 +535,70 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
                 Sem registros para análise de gargalos.
               </p>
             ) : (
-              analise.top3Demorados.map((c, idx) => (
-                <div
-                  key={idx}
-                  className="p-3.5 rounded-lg bg-red-950/20 border border-red-900/50 text-xs space-y-1.5"
-                >
-                  <div className="flex items-center justify-between pb-1.5 border-b border-red-900/30">
-                    <span className="font-black text-red-400 uppercase tracking-wider text-[11px]">
-                      #{idx + 1} Gargalo • {c.maquina}
-                    </span>
-                    <span className="font-mono text-emerald-400 font-bold">{c.tempo}</span>
-                  </div>
+              analise.top3Demorados.map((c, idx) => {
+                const detalhes = extrairDetalhesCompletosSetup(c);
+                const paradasFiltradas = detalhes.linhasEventos.filter(
+                  (l) => !l.includes('INÍCIO DO SETUP') && !l.includes('FIM DO SETUP')
+                );
 
-                  <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
-                    <div>
-                      Data: <strong className="text-white">{c.data}</strong>
-                    </div>
-                    <div>
-                      Peça: <strong className="text-blue-300">{c.peca}</strong>
-                    </div>
-                    <div>
-                      Mod. Ant: <strong className="text-amber-400">{c.modeloAnterior || '-'}</strong>
-                    </div>
-                    <div>
-                      Preps: <strong className="text-white">{c.prep1} / {c.prep2}</strong>
-                    </div>
-                  </div>
-
-                  {/* Stoppage causes list */}
-                  <div className="mt-2 pt-2 border-t border-red-900/30 space-y-1">
-                    <span className="text-[10px] font-bold uppercase text-red-300/80 block">
-                      Paradas & Eventos Apontados:
-                    </span>
-                    {c.historico && c.historico.trim() !== '' ? (
-                      c.historico.split('|').map((ev, i) => (
-                        <div
-                          key={i}
-                          className="pl-2 border-l-2 border-red-600/60 text-slate-300 text-[11px] font-mono leading-tight"
-                        >
-                          {ev.trim()}
-                        </div>
-                      ))
-                    ) : (
-                      <span className="text-slate-500 italic text-[10px]">
-                        Nenhuma parada detalhada gravada.
+                return (
+                  <div
+                    key={idx}
+                    className="p-3.5 rounded-lg bg-red-950/20 border border-red-900/50 text-xs space-y-2"
+                  >
+                    <div className="flex items-center justify-between pb-1.5 border-b border-red-900/30">
+                      <span className="font-black text-red-400 uppercase tracking-wider text-[11px]">
+                        #{idx + 1} Gargalo • {c.maquina}
                       </span>
-                    )}
+                      <span className="font-mono text-emerald-400 font-bold">{c.tempo}</span>
+                    </div>
+
+                    {/* Detalhamento de Início e Fim do Setup */}
+                    <div className="bg-slate-900/90 p-2.5 rounded-lg border border-red-900/30 space-y-1 text-[11px]">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-300 gap-1 pb-1 border-b border-slate-800">
+                        <span>
+                          Início: <strong className="text-white">{detalhes.inicioSetupStr}</strong>
+                        </span>
+                        <span>
+                          Fim: <strong className="text-white">{detalhes.fimSetupStr}</strong>
+                        </span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-300 gap-1 pt-0.5">
+                        <span>
+                          Peça: <strong className="text-blue-300">{c.peca}</strong>
+                        </span>
+                        <span>
+                          Mod. Ant: <strong className="text-amber-400">{c.modeloAnterior || '-'}</strong>
+                        </span>
+                      </div>
+                      <div className="text-slate-400 text-[10px] pt-0.5">
+                        Preparadores: <strong className="text-slate-200">{c.prep1} / {c.prep2}</strong>
+                      </div>
+                    </div>
+
+                    {/* Stoppage causes list with detailed start, end, and duration */}
+                    <div className="mt-2 pt-2 border-t border-red-900/30 space-y-1">
+                      <span className="text-[10px] font-bold uppercase text-red-300/80 block">
+                        Paradas & Intervalos (Início, Fim & Duração):
+                      </span>
+                      {paradasFiltradas.length > 0 ? (
+                        paradasFiltradas.map((ev, i) => (
+                          <div
+                            key={i}
+                            className="pl-2 border-l-2 border-red-500/80 text-slate-200 text-[11px] font-mono leading-tight py-0.5"
+                          >
+                            {ev.replace(/^•\s*/, '')}
+                          </div>
+                        ))
+                      ) : (
+                        <span className="text-slate-500 italic text-[10px]">
+                          Nenhuma parada detalhada gravada.
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -624,6 +665,13 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
           </div>
         )}
       </div>
+
+      {/* PDF Ready / Save As Confirmation Modal */}
+      <ModalPdfPronto
+        aberto={modalPdfAberto}
+        dados={dadosPdfModal}
+        aoFechar={() => setModalPdfAberto(false)}
+      />
     </div>
   );
 };
