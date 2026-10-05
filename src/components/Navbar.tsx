@@ -145,14 +145,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             />
             <span className="font-semibold hidden md:inline">
-              {sincronizando ? 'Sincronizando...' : 'Auto-Sync (40s)'}
+              {sincronizando ? 'Sincronizando...' : 'Sync Tempo Real'}
             </span>
           </div>
-          {segundosParaSync !== undefined && !sincronizando && (
-            <span className="font-mono text-[10px] text-blue-400 font-bold bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 hidden md:inline">
-              {segundosParaSync}s
-            </span>
-          )}
+          <span className="font-mono text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30 hidden md:inline flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            LIVE
+          </span>
         </button>
 
         {/* Shift indicator */}
@@ -174,7 +173,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="hidden md:flex items-center justify-between px-2.5 py-1.5 text-[10px] text-slate-500">
           <span className="flex items-center gap-1.5">
             <Wifi className={`w-3 h-3 ${online ? 'text-emerald-400' : 'text-amber-400'}`} />
-            {online ? 'API Centralizada' : 'Modo Offline'}
+            {online ? 'Nuvem Centralizada' : 'Modo Offline'}
           </span>
           <span className="truncate max-w-[80px]" title={shiftScheduleStr}>
             {shiftScheduleStr}

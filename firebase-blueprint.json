@@ -1,0 +1,26 @@
+{
+  "entities": {
+    "SetupStore": {
+      "title": "SetupStore",
+      "description": "Central shared store containing CNC machines, preparers, checklist tasks, shift configs, active setups, and completed setups.",
+      "type": "object",
+      "properties": {
+        "maquinas": { "type": "string", "description": "JSON serialized machines array" },
+        "preparadores": { "type": "string", "description": "JSON serialized preparadores array" },
+        "tarefas1": { "type": "string", "description": "JSON serialized checklist parte 1" },
+        "tarefas2": { "type": "string", "description": "JSON serialized checklist parte 2" },
+        "tarefasPendencias": { "type": "string", "description": "JSON serialized checklist pendencias" },
+        "turnoConfig": { "type": "string", "description": "JSON serialized shift configuration" },
+        "setupsAtivos": { "type": "string", "description": "JSON serialized active setups map" },
+        "concluidos": { "type": "string", "description": "JSON serialized completed setups array" },
+        "updatedAt": { "type": "string", "description": "Timestamp of last modification" }
+      }
+    }
+  },
+  "firestore": {
+    "/app_state/{stateId}": {
+      "schema": "SetupStore",
+      "description": "Real-time synchronized application state document for all tablets, PCs, and preview containers"
+    }
+  }
+}

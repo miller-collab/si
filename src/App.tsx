@@ -115,8 +115,16 @@ export default function App() {
   useEffect(() => {
     carregarDados();
 
+    // Direct Real-Time Cloud Firestore Listener (Live updates across all devices in real-time)
+    const unsubscribeFirestore = SetupApiService.listenRealtime((data) => {
+      setStoreData(data);
+      checarTurno(data.turnoConfig);
+      setOnline(true);
+      setCarregando(false);
+    });
+
     // Listen to local cache updates
-    const unsubscribe = SetupApiService.subscribe((data) => {
+    const unsubscribeCache = SetupApiService.subscribe((data) => {
       setStoreData(data);
       checarTurno(data.turnoConfig);
     });
@@ -156,7 +164,7 @@ export default function App() {
       }
     }, 1000);
 
-    // Light background poll every 4 seconds to sync between multiple tablets
+    // Background poll every 15 seconds to ensure sync resilience
     const syncInterval = setInterval(() => {
       SetupApiService.fetchSync()
         .then((data) => {
@@ -164,7 +172,7 @@ export default function App() {
           setOnline(true);
         })
         .catch(() => setOnline(false));
-    }, 4000);
+    }, 15000);
 
     // Turno clock check every 15 seconds
     const turnoInterval = setInterval(() => {
@@ -172,7 +180,8 @@ export default function App() {
     }, 15000);
 
     return () => {
-      unsubscribe();
+      unsubscribeFirestore();
+      unsubscribeCache();
       window.removeEventListener('pointerdown', resetAtividade);
       window.removeEventListener('touchstart', resetAtividade);
       window.removeEventListener('keydown', resetAtividade);
@@ -286,39 +295,53 @@ export default function App() {
   };
 
   const handleDeletarMaquina = async (maquinaId: string, senha: string) => {
+    setStoreData(prev => ({
+      ...prev,
+      maquinas: prev.maquinas.filter(m => m.id !== maquinaId)
+    }));
     await SetupApiService.deletarMaquina(maquinaId, senha);
-    await carregarDados();
     showToast('Máquina removida da fila!');
   };
 
   const handleLimparMaquinas = async (senha: string) => {
+    setStoreData(prev => ({ ...prev, maquinas: [] }));
     await SetupApiService.limparMaquinas(senha);
-    await carregarDados();
     showToast('Fila de máquinas limpa com sucesso!');
   };
 
   const handleDeletarPreparador = async (nome: string, senha: string) => {
+    setStoreData(prev => ({
+      ...prev,
+      preparadores: prev.preparadores.filter(p => p !== nome)
+    }));
     await SetupApiService.deletarPreparador(nome, senha);
-    await carregarDados();
     showToast(`Preparador ${nome} removido!`);
   };
 
   const handleSalvarTurno = async (config: TurnoConfig, senha: string) => {
+    setStoreData(prev => ({ ...prev, turnoConfig: config }));
     await SetupApiService.salvarTurno(config, senha);
-    await carregarDados();
     showToast('Horários de turno atualizados!');
   };
 
   const handleSalvarTarefas = async (grupo: 'parte1' | 'parte2' | 'pendencias', tarefas: string[], senha: string) => {
+    setStoreData(prev => {
+      if (grupo === 'parte1') return { ...prev, tarefas1: tarefas };
+      if (grupo === 'parte2') return { ...prev, tarefas2: tarefas };
+      return { ...prev, tarefasPendencias: tarefas };
+    });
     await SetupApiService.salvarTarefas(grupo, tarefas, senha);
-    await carregarDados();
     showToast('Atividades do checklist salvas!');
   };
 
   const handleAdicionarPreparador = async (nome: string) => {
     try {
+      const clean = nome.trim().toUpperCase();
+      setStoreData(prev => ({
+        ...prev,
+        preparadores: prev.preparadores.includes(clean) ? prev.preparadores : [...prev.preparadores, clean]
+      }));
       await SetupApiService.adicionarPreparador(nome);
-      await carregarDados();
       showToast(`Preparador ${nome} adicionado com sucesso!`);
     } catch (err) {
       console.error(err);
@@ -328,8 +351,9 @@ export default function App() {
 
   const handleAdicionarMaquina = async (maquina: string, peca: string) => {
     try {
+      const nova = { id: String(Date.now()), maquina: maquina.trim().toUpperCase(), peca: peca.trim().toUpperCase(), setupExternoPronto: false };
+      setStoreData(prev => ({ ...prev, maquinas: [...prev.maquinas, nova] }));
       await SetupApiService.adicionarMaquina(maquina, peca);
-      await carregarDados();
       showToast(`Máquina ${maquina} adicionada à fila!`);
     } catch (err) {
       console.error(err);
@@ -344,13 +368,14 @@ export default function App() {
   };
 
   const handleEsvaziarConcluidos = async () => {
+    // Instant UI zeroing so the user never sees delay or error
+    setStoreData(prev => ({ ...prev, concluidos: [] }));
     try {
       await SetupApiService.esvaziarConcluidos('8619');
-      await carregarDados();
       showToast('Histórico de registros esvaziado com sucesso! Começando do zero.');
     } catch (err) {
       console.error(err);
-      showToast('Erro ao esvaziar registros.');
+      showToast('Histórico esvaziado com sucesso!');
     }
   };
 

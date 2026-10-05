@@ -4,12 +4,30 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import type { StoreData, SetupAtivo, SetupConcluido, TurnoConfig, ParadaEvento, Maquina } from './src/types';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DATA_DIR = path.resolve(__dirname, 'data');
 const DATA_FILE = path.resolve(DATA_DIR, 'setup_store.json');
+
+// Initialize Firebase for centralized multi-server/multi-tablet sync
+const firebaseConfigPath = path.resolve(__dirname, 'firebase-applet-config.json');
+let firestoreDb: any = null;
+if (fs.existsSync(firebaseConfigPath)) {
+  try {
+    const fbConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
+    const fbApp = getApps().length > 0 ? getApp() : initializeApp(fbConfig);
+    firestoreDb = fbConfig.firestoreDatabaseId && fbConfig.firestoreDatabaseId !== '(default)'
+      ? getFirestore(fbApp, fbConfig.firestoreDatabaseId)
+      : getFirestore(fbApp);
+    console.log('Centralized Cloud Firestore initialized in backend server.');
+  } catch (e) {
+    console.warn('Erro ao inicializar Firebase no backend:', e);
+  }
+}
 
 function formatarTempoStr(ms: number): string {
   const totalSeg = Math.floor(Math.max(0, ms) / 1000);
@@ -111,11 +129,49 @@ const INITIAL_CONCLUIDOS: SetupConcluido[] = [
   }
 ];
 
+const sseClients: Set<express.Response> = new Set();
+
+function broadcastStoreData(data: StoreData) {
+  const payload = `data: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.write(payload);
+    } catch (_) {
+      sseClients.delete(client);
+    }
+  }
+}
+
 class StoreManager {
   private data: StoreData;
 
   constructor() {
     this.data = this.loadData();
+    this.initCloudSync();
+  }
+
+  private initCloudSync() {
+    if (!firestoreDb) return;
+    try {
+      onSnapshot(doc(firestoreDb, 'app_state', 'main_store'), (snap) => {
+        if (snap.exists()) {
+          const raw = snap.data();
+          if (raw && raw.dataJson) {
+            try {
+              const cloudData = JSON.parse(raw.dataJson);
+              if (cloudData && typeof cloudData === 'object') {
+                this.data = cloudData;
+                this.saveDataDirect(cloudData);
+              }
+            } catch (err) {
+              console.warn('Erro ao decodificar Firestore no backend:', err);
+            }
+          }
+        }
+      }, (err) => console.warn('Erro listener Firestore backend:', err));
+    } catch (err) {
+      console.warn('Erro ao conectar listener Firestore no backend:', err);
+    }
   }
 
   private loadData(): StoreData {
@@ -185,6 +241,15 @@ class StoreManager {
 
   public save() {
     this.saveDataDirect(this.data);
+    broadcastStoreData(this.getData());
+    if (firestoreDb) {
+      setDoc(doc(firestoreDb, 'app_state', 'main_store'), {
+        dataJson: JSON.stringify(this.data),
+        updatedAt: Date.now(),
+        totalAtivos: Object.keys(this.data.setupsAtivos || {}).length,
+        totalConcluidos: (this.data.concluidos || []).length
+      }).catch((err: any) => console.warn('Erro ao salvar no Firestore via backend:', err?.message || err));
+    }
   }
 
   public getData(): StoreData {
@@ -530,6 +595,32 @@ async function startServer() {
   });
 
   // API Endpoints
+  // Real-time Server-Sent Events stream for instant synchronization across all tablets and PCs
+  app.get('/api/setup/events', (req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.write(`data: ${JSON.stringify(store.getData())}\n\n`);
+    sseClients.add(res);
+
+    const keepAlive = setInterval(() => {
+      try {
+        res.write(': ping\n\n');
+      } catch (_) {
+        clearInterval(keepAlive);
+        sseClients.delete(res);
+      }
+    }, 15000);
+
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      sseClients.delete(res);
+    });
+  });
+
   app.get('/api/setup/sync', (req, res) => {
     res.json(store.getData());
   });
