@@ -75,4 +75,5 @@ export interface StoreData {
   setupsAtivos: Record<string, SetupAtivo>;
   concluidos: SetupConcluido[];
   serverTime?: number;
+  updatedAt?: number;
 }
