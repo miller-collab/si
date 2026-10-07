@@ -12,12 +12,13 @@ import {
   AlertTriangle,
   Cog,
   BarChart,
-  ArrowRight
+  ArrowRight,
+  Eye
 } from 'lucide-react';
 import type { SetupConcluido } from '../types';
 import { parseDataBR, formatarTempo } from '../utils/turno';
-import { ModalPdfPronto } from './ModalPdfPronto';
-import { baixarRelatorioGestorPdf, extrairDetalhesCompletosSetup, type DadosRelatorioGestor } from '../utils/pdfGestor';
+import { ModalVisualizarRelatorio } from './ModalVisualizarRelatorio';
+import { extrairLinhasParadas, type DadosRelatorioGestor } from '../utils/pdfGestor';
 
 interface AbaPainelGestorProps {
   concluidos: SetupConcluido[];
@@ -245,10 +246,7 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
       setupMaiorTempo: analise.setupMaiorTempo
     };
 
-    // 1. Immediately triggers native browser "Salvar Como" / download of clean B&W PDF
-    baixarRelatorioGestorPdf(dadosRelatorio);
-
-    // 2. Opens friendly confirmation modal for re-download or direct print tab
+    // Abre o modal de pré-visualização completa da folha antes de salvar ou imprimir (Foto 1)
     setDadosPdfModal(dadosRelatorio);
     setModalPdfAberto(true);
   };
@@ -545,10 +543,7 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
               </p>
             ) : (
               analise.top3Demorados.map((c, idx) => {
-                const detalhes = extrairDetalhesCompletosSetup(c);
-                const paradasFiltradas = detalhes.linhasEventos.filter(
-                  (l) => !l.includes('INÍCIO DO SETUP') && !l.includes('FIM DO SETUP')
-                );
+                const paradasFiltradas = extrairLinhasParadas(c);
 
                 return (
                   <div
@@ -562,14 +557,14 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
                       <span className="font-mono text-emerald-400 font-bold">{c.tempo}</span>
                     </div>
 
-                    {/* Detalhamento de Início e Fim do Setup */}
+                    {/* Detalhamento do Setup */}
                     <div className="bg-slate-900/90 p-2.5 rounded-lg border border-red-900/30 space-y-1 text-[11px]">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-300 gap-1 pb-1 border-b border-slate-800">
                         <span>
-                          Início: <strong className="text-white">{detalhes.inicioSetupStr}</strong>
+                          Data: <strong className="text-white">{c.data}</strong>
                         </span>
                         <span>
-                          Fim: <strong className="text-white">{detalhes.fimSetupStr}</strong>
+                          Tempo: <strong className="text-emerald-400">{c.tempo}</strong>
                         </span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-300 gap-1 pt-0.5">
@@ -588,10 +583,10 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
                     {/* Stoppage causes list with detailed start, end, and duration */}
                     <div className="mt-2 pt-2 border-t border-red-900/30 space-y-1">
                       <span className="text-[10px] font-bold uppercase text-red-300/80 block">
-                        Paradas & Intervalos (Início, Fim & Duração):
+                        Paradas & Intervalos (Cronologia Foto 1):
                       </span>
                       {paradasFiltradas.length > 0 ? (
-                        paradasFiltradas.map((ev, i) => (
+                        paradasFiltradas.map((ev: string, i: number) => (
                           <div
                             key={i}
                             className="pl-2 border-l-2 border-red-500/80 text-slate-200 text-[11px] font-mono leading-tight py-0.5"
@@ -675,8 +670,8 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
         )}
       </div>
 
-      {/* PDF Ready / Save As Confirmation Modal */}
-      <ModalPdfPronto
+      {/* Modal Visualizar Folha A4 Antes de Salvar (Foto 1) */}
+      <ModalVisualizarRelatorio
         aberto={modalPdfAberto}
         dados={dadosPdfModal}
         aoFechar={() => setModalPdfAberto(false)}

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   StoreData,
   Maquina,
@@ -79,10 +79,15 @@ export default function App() {
     setTimeout(() => setToastMsg(null), 3500);
   };
 
+  const storeDataRef = useRef(storeData);
+  storeDataRef.current = storeData;
+
   // Turno evaluation
-  const checarTurno = useCallback((config: TurnoConfig) => {
+  const checarTurno = useCallback((config?: TurnoConfig) => {
+    const cfg = config || storeDataRef.current?.turnoConfig;
+    if (!cfg) return;
     const agora = new Date();
-    const dentro = estaNoTurno(agora, config);
+    const dentro = estaNoTurno(agora, cfg);
     setTurnoAtivo(dentro);
   }, []);
 
@@ -102,36 +107,34 @@ export default function App() {
   }, [checarTurno]);
 
   useEffect(() => {
-    // Initial fetch
+    // 1. Initial fetch from local server
     carregarDados();
 
-    // Listen to local cache updates
+    // 2. Listen to local cache updates
     const unsubscribeApi = SetupApiService.subscribe((data) => {
       setStoreData(data);
       checarTurno(data.turnoConfig);
     });
 
-    // Real-time Firestore sync listener: keeps all devices synchronized via Firebase
+    // 3. Real-time Firestore sync listener: keeps all devices synchronized via Firebase
     const unsubscribeFirestore = FirebaseService.subscribeStore((cloudData) => {
       if (cloudData) {
         setStoreData(cloudData);
         checarTurno(cloudData.turnoConfig);
+        setOnline(true);
       }
     });
 
-    // Background poll every 5 seconds to sync between tablets & machines
+    // 4. Background poll every 10 seconds to detect network recovery
     const syncInterval = setInterval(() => {
       SetupApiService.fetchSync()
-        .then((data) => {
-          setStoreData(data);
-          setOnline(true);
-        })
+        .then(() => setOnline(true))
         .catch(() => setOnline(false));
-    }, 5000);
+    }, 10000);
 
-    // Turno clock check every 15 seconds
+    // 5. Turno clock check every 15 seconds
     const turnoInterval = setInterval(() => {
-      checarTurno(storeData.turnoConfig);
+      checarTurno();
     }, 15000);
 
     return () => {
@@ -140,7 +143,7 @@ export default function App() {
       clearInterval(syncInterval);
       clearInterval(turnoInterval);
     };
-  }, [carregarDados, checarTurno, storeData.turnoConfig]);
+  }, [carregarDados, checarTurno]);
 
   // Backup Completo: Download JSON + Cloud Snapshot in Firebase
   const handleBackupTudo = async () => {
@@ -242,18 +245,58 @@ export default function App() {
   // Handlers
   const handleIniciarSetup = async (maquina: Maquina, modeloAnterior: string) => {
     setMaquinaParaIniciar(null);
-    try {
-      await SetupApiService.iniciarSetup(maquina.id, maquina.maquina, maquina.peca, modeloAnterior);
-      const updatedData = await carregarDados();
-      setAbaAtiva('ativos');
-      showToast(`Setup iniciado para a máquina ${maquina.maquina}!`);
+    const agora = Date.now();
+    const d = new Date(agora);
+    const dataInicioStr = `${d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`;
+    const setupId = `setup_${agora}`;
+    const modClean = (modeloAnterior || '').trim() || 'NÃO INFORMADO';
 
-      if (updatedData) {
-        FirebaseService.salvarStore(updatedData).catch((e) => console.warn('Sync Firebase:', e));
+    const novoSetup: SetupAtivo = {
+      id: setupId,
+      rowId: String(maquina.id),
+      maquina: maquina.maquina,
+      peca: maquina.peca,
+      modeloAnterior: modClean,
+      prep1Val: '',
+      prep2Val: '',
+      dataInicio: dataInicioStr,
+      inicioMs: agora,
+      lastTick: agora,
+      tempoDecorridoMs: 0,
+      deductionsMs: 0,
+      paradaAtiva: false,
+      historico: [`[${dataInicioStr}] Início do setup`],
+      eventos: [],
+      checksStateParte1: new Array((storeData.tarefas1 || []).length).fill(false),
+      checksStateParte2: new Array((storeData.tarefas2 || []).length).fill(false),
+      checksStatePendencias: new Array((storeData.tarefasPendencias || []).length).fill(false),
+      setupRegistrado: false,
+      updatedAt: agora
+    };
+
+    // 1. Optimistic instant local update
+    const nextData: StoreData = {
+      ...storeData,
+      maquinas: (storeData.maquinas || []).filter((m) => String(m.id) !== String(maquina.id)),
+      setupsAtivos: {
+        ...(storeData.setupsAtivos || {}),
+        [setupId]: novoSetup
       }
-    } catch (err) {
-      console.error(err);
-      showToast('Erro ao iniciar setup.');
+    };
+    setStoreData(nextData);
+    setAbaAtiva('ativos');
+    showToast(`Setup iniciado para a máquina ${maquina.maquina}!`);
+
+    // 2. Immediate real-time Firebase Cloud sync for all tablets
+    FirebaseService.salvarStore(nextData).catch((fbErr) => {
+      console.warn('Sync Firebase ao iniciar setup:', fbErr);
+    });
+
+    // 3. Local backend disk persistence
+    try {
+      await SetupApiService.iniciarSetup(maquina.id, maquina.maquina, maquina.peca, modClean);
+    } catch (err: any) {
+      console.warn('Backend local persist aviso:', err);
     }
   };
 
@@ -456,10 +499,16 @@ export default function App() {
       await SetupApiService.adicionarMaquina(maquina, peca);
       const updated = await carregarDados();
       showToast(`Máquina ${maquina} adicionada à fila!`);
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
-    } catch (err) {
+      if (updated) {
+        try {
+          await FirebaseService.salvarStore(updated);
+        } catch (fbErr) {
+          console.warn('Sync Firebase ao adicionar máquina:', fbErr);
+        }
+      }
+    } catch (err: any) {
       console.error(err);
-      showToast('Erro ao adicionar máquina.');
+      showToast(err?.message || 'Erro ao adicionar máquina.');
     }
   };
 

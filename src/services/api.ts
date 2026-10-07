@@ -20,14 +20,18 @@ export class SetupApiService {
     return null;
   }
 
-  public static setCache(data: StoreData) {
+  public static setCache(data: StoreData, forceNotify: boolean = true) {
+    const oldStr = this.cachedData ? JSON.stringify(this.cachedData) : '';
+    const newStr = JSON.stringify(data);
     this.cachedData = data;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(STORAGE_KEY, newStr);
     } catch (e) {
       console.warn('Erro ao gravar cache local:', e);
     }
-    this.notify(data);
+    if (forceNotify || oldStr !== newStr) {
+      this.notify(data);
+    }
   }
 
   public static subscribe(listener: (data: StoreData) => void) {
@@ -58,7 +62,7 @@ export class SetupApiService {
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data: StoreData = await res.json();
-      this.setCache(data);
+      this.setCache(data, false);
       return data;
     } catch (err) {
       const cached = this.getCachedData();
@@ -67,7 +71,12 @@ export class SetupApiService {
     }
   }
 
-  public static async iniciarSetup(rowId: string, maquina: string, peca: string, modeloAnterior: string): Promise<SetupAtivo> {
+  public static async iniciarSetup(
+    rowId: string,
+    maquina: string,
+    peca: string,
+    modeloAnterior: string
+  ): Promise<{ setup: SetupAtivo; data: StoreData }> {
     const agora = Date.now();
     const d = new Date(agora);
     const dataInicioStr = `${d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`;
@@ -84,10 +93,13 @@ export class SetupApiService {
         dataInicio: dataInicioStr
       })
     });
-    if (!res.ok) throw new Error('Falha ao iniciar setup');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao iniciar setup');
+    }
     const json = await res.json();
     if (json.data) this.setCache(json.data);
-    return json.setup;
+    return { setup: json.setup, data: json.data };
   }
 
   public static async autoSaveCard(

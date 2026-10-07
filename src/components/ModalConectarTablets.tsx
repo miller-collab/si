@@ -26,11 +26,9 @@ export const ModalConectarTablets: React.FC<ModalConectarTabletsProps> = ({
 }) => {
   const [copiado, setCopiado] = useState(false);
 
-  // Target production URL or current window URL
-  const publicUrl = typeof window !== 'undefined'
-    ? (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
-        ? 'https://ais-pre-nqcvyd3bnkck2qksczzs5i-795025193395.us-east1.run.app'
-        : window.location.origin)
+  // Target active URL: always uses current window URL so all tablets are in the same synchronized place
+  const publicUrl = typeof window !== 'undefined' && window.location
+    ? window.location.href.split('#')[0].split('?')[0]
     : 'https://ais-pre-nqcvyd3bnkck2qksczzs5i-795025193395.us-east1.run.app';
 
   const qrCodeDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(publicUrl)}`;

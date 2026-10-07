@@ -17,10 +17,13 @@ import {
   FileCheck,
   Lock,
   KeyRound,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Eye
 } from 'lucide-react';
 import type { SetupConcluido, StoreData } from '../types';
 import { parseDataBR, formatarTempo } from '../utils/turno';
+import { ModalVisualizarRelatorio } from './ModalVisualizarRelatorio';
+import type { DadosRelatorioGestor } from '../utils/pdfGestor';
 
 interface AbaRelatoriosProps {
   concluidos: SetupConcluido[];
@@ -52,6 +55,7 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
   // Modals for Loading and Emptying Data (Foto 1)
   const [modalEsvaziarAberto, setModalEsvaziarAberto] = useState(false);
   const [modalCarregarAberto, setModalCarregarAberto] = useState(false);
+  const [modalVisualizarAberto, setModalVisualizarAberto] = useState(false);
   const [backupParaCarregar, setBackupParaCarregar] = useState<any>(null);
   const [processandoAcao, setProcessandoAcao] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,6 +148,93 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
       chartData: points.slice(0, 40).reverse() // Show chronological points
     };
   }, [filtrados]);
+
+  // Foto 1 Data Structure for Preview & PDF (Visualizar Antes de Salvar)
+  const dadosVisualizar: DadosRelatorioGestor = useMemo(() => {
+    let totalSegundos = 0;
+    let minSeg = Infinity;
+    let maxSeg = -1;
+    let setupMenorTempo: SetupConcluido | null = null;
+    let setupMaiorTempo: SetupConcluido | null = null;
+    const contagemEventos: Record<string, { descricao: string; count: number }> = {};
+    let totalOcorrenciasParadas = 0;
+
+    const listWithSeg = filtrados.map((c) => {
+      let seg = 0;
+      if (c.tempoMs) {
+        seg = Math.floor(c.tempoMs / 1000);
+      } else if (c.tempo && c.tempo !== '-') {
+        const p = c.tempo.split(':');
+        if (p.length === 3) {
+          seg = +p[0] * 3600 + +p[1] * 60 + +p[2];
+        }
+      }
+
+      if (seg > 0) {
+        totalSegundos += seg;
+        if (seg < minSeg) {
+          minSeg = seg;
+          setupMenorTempo = c;
+        }
+        if (seg > maxSeg) {
+          maxSeg = seg;
+          setupMaiorTempo = c;
+        }
+      }
+
+      if (c.historico && c.historico.trim() !== '') {
+        c.historico.split('|').forEach((ev) => {
+          let motivo = ev.replace(/\[.*?\]\s*/, '').trim();
+          if (motivo) {
+            if (motivo.toLowerCase().startsWith('parada:')) {
+              motivo = motivo.substring(7).trim();
+            }
+            const key = motivo.toUpperCase();
+            if (!contagemEventos[key]) {
+              contagemEventos[key] = { descricao: motivo, count: 0 };
+            }
+            contagemEventos[key].count++;
+            totalOcorrenciasParadas++;
+          }
+        });
+      }
+
+      return { ...c, segundosCalculados: seg };
+    });
+
+    const mediaSeg = filtrados.length > 0 ? Math.floor(totalSegundos / filtrados.length) : 0;
+    const top3Demorados = [...listWithSeg]
+      .sort((a, b) => (b.segundosCalculados || 0) - (a.segundosCalculados || 0))
+      .slice(0, 3);
+
+    const top10Paradas = Object.values(contagemEventos)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10)
+      .map((p) => ({
+        ...p,
+        pct: totalOcorrenciasParadas > 0 ? +((p.count / totalOcorrenciasParadas) * 100).toFixed(1) : 0
+      }));
+
+    let periodoTexto = 'Todos os Registros';
+    if (filtroPeriodo === 'semana') periodoTexto = 'Últimos 7 Dias';
+    else if (filtroPeriodo !== 'todos') periodoTexto = `Mês ${filtroPeriodo}`;
+
+    const colabNome = filtroMaquina === 'todas' ? 'Todas as Máquinas' : `Máquina: ${filtroMaquina}`;
+
+    return {
+      filtrados,
+      colabNome,
+      periodoTexto,
+      top3: top3Demorados,
+      top10Paradas,
+      kpiTotal: filtrados.length,
+      kpiMedia: formatarTempo(mediaSeg * 1000),
+      menorTempoStr: minSeg === Infinity ? '00:00:00' : formatarTempo(minSeg * 1000),
+      maiorTempoStr: maxSeg === -1 ? '00:00:00' : formatarTempo(maxSeg * 1000),
+      setupMenorTempo,
+      setupMaiorTempo
+    };
+  }, [filtrados, filtroMaquina, filtroPeriodo]);
 
   // Export CSV
   const exportarCSV = () => {
@@ -318,14 +409,26 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
             </optgroup>
           </select>
 
-          {/* PDF Button */}
+          {/* Visualizar Antes de Salvar Button (Foto 1) */}
           <button
-            onClick={() => aoImprimir(filtrados, filtroMaquina, filtroPeriodo)}
-            className="bg-slate-200 hover:bg-white text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md"
-            title="Gerar PDF para impressão em A4"
+            type="button"
+            onClick={() => setModalVisualizarAberto(true)}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer"
+            title="Visualizar a folha de relatório completa antes de salvar ou imprimir (Foto 1)"
+          >
+            <Eye className="w-4 h-4 text-slate-950" />
+            <span>Visualizar Antes de Salvar</span>
+          </button>
+
+          {/* PDF Button (Foto 1) */}
+          <button
+            type="button"
+            onClick={() => setModalVisualizarAberto(true)}
+            className="bg-slate-200 hover:bg-white text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer"
+            title="Visualizar e salvar relatório em folha A4 (Padrão Oficial Foto 1)"
           >
             <Printer className="w-3.5 h-3.5 text-slate-950" />
-            <span>PDF</span>
+            <span>PDF (Foto 1)</span>
           </button>
 
           {/* CSV Button */}
@@ -751,6 +854,13 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal Visualizar Folha A4 Antes de Salvar (Foto 1) */}
+      <ModalVisualizarRelatorio
+        aberto={modalVisualizarAberto}
+        dados={dadosVisualizar}
+        aoFechar={() => setModalVisualizarAberto(false)}
+      />
     </div>
   );
 };
