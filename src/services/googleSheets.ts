@@ -213,6 +213,7 @@ export class GoogleSheetsService {
     ];
 
     const headersMaquinas = [
+      'ID',
       'Máquina',
       'Peça',
       'Setup Externo Pronto',
@@ -239,7 +240,7 @@ export class GoogleSheetsService {
         values: [headersConcluidos]
       },
       {
-        range: 'MAQUINAS_FILA!A1:E1',
+        range: 'MAQUINAS_FILA!A1:F1',
         values: [headersMaquinas]
       },
       {
@@ -325,9 +326,9 @@ export class GoogleSheetsService {
     const cleanId = this.extrairSpreadsheetId(spreadsheetId);
     if (!cleanId) throw new Error('ID da Planilha não configurado.');
 
-    // 1. Ler SETUPS_CONCLUIDOS
+    // 1. Ler SETUPS_CONCLUIDOS (Sem limite de quantidade - leitura contínua infinita)
     const resConc = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/SETUPS_CONCLUIDOS!A2:K1000`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/SETUPS_CONCLUIDOS!A2:K`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -372,9 +373,9 @@ export class GoogleSheetsService {
       });
     }
 
-    // 2. Ler MAQUINAS_FILA (Lê colunas A até G e suporta senha 1152 em coluna própria)
+    // 2. Ler MAQUINAS_FILA (Sem limite de linhas - lê todas as máquinas em fila)
     const resMaq = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/MAQUINAS_FILA!A2:G200`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/MAQUINAS_FILA!A2:G`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -389,21 +390,31 @@ export class GoogleSheetsService {
         let pecaName = '';
         let rowId = '';
 
-        // Detecta se Coluna A é ID do sistema (timestamp longo ou inicia com maq_ / sheet_)
+        const colA = String(r[0] || '').trim();
+        const colB = String(r[1] || '').trim();
+        const colC = String(r[2] || '').trim();
+
+        // Se a coluna B for o código da máquina (padrão com Col A = ID):
         if (
-          r.length >= 3 &&
-          (/^\d{8,}$/.test(String(r[0]).trim()) ||
-            String(r[0]).startsWith('maq_') ||
-            String(r[0]).startsWith('sheet_'))
+          colB &&
+          colB.toUpperCase() !== 'MÁQUINA' &&
+          colB.toUpperCase() !== 'MAQUINA' &&
+          colB.toUpperCase() !== 'PEÇA' &&
+          colB.toUpperCase() !== 'PECA'
         ) {
-          rowId = String(r[0]).trim();
-          maqName = String(r[1] || '').trim();
-          pecaName = String(r[2] || '').trim();
-        } else {
-          // Formato direto de digitação na planilha Google: Coluna A = Máquina, Coluna B = Peça
-          maqName = String(r[0] || '').trim();
-          pecaName = String(r[1] || '').trim();
-          rowId = `sheet_maq_${idx}_${maqName}`;
+          rowId = colA || `sheet_maq_${idx}_${colB}`;
+          maqName = colB;
+          pecaName = colC;
+        } else if (
+          colA &&
+          colA.toUpperCase() !== 'MÁQUINA' &&
+          colA.toUpperCase() !== 'MAQUINA' &&
+          colA.toUpperCase() !== 'ID'
+        ) {
+          // Caso a coluna A contenha o nome da máquina diretamente
+          rowId = `sheet_maq_${idx}_${colA}`;
+          maqName = colA;
+          pecaName = colB;
         }
 
         // LÓGICA CIRÚRGICA DE SENHA E STATUS DE SETUP EXTERNO:
@@ -423,7 +434,8 @@ export class GoogleSheetsService {
           maqUpper &&
           maqUpper !== '-' &&
           maqUpper !== 'MÁQUINA' &&
-          maqUpper !== 'MAQUINA'
+          maqUpper !== 'MAQUINA' &&
+          maqUpper !== 'ID'
         ) {
           maquinas.push({
             id: rowId,
@@ -451,7 +463,8 @@ export class GoogleSheetsService {
     if (!cleanId) throw new Error('ID da Planilha não configurado.');
 
     if (this.isSyncing) {
-      return { sucesso: true, mensagem: 'Sincronização em andamento', storeAtualizado: store };
+      this.pendingSyncStore = store;
+      return { sucesso: true, mensagem: 'Sincronização em andamento, agendada.', storeAtualizado: store };
     }
 
     this.isSyncing = true;
@@ -488,6 +501,7 @@ export class GoogleSheetsService {
         };
       });
 
+      // PRESERVA TODAS as máquinas cadastradas no app que ainda não estavam na planilha!
       (store.maquinas || []).forEach((mLocal) => {
         const chave = `${mLocal.maquina}_${mLocal.peca}`.toUpperCase();
         if (!maquinasSheetNomes.has(chave)) {
@@ -518,8 +532,9 @@ export class GoogleSheetsService {
         c.id
       ]);
 
-      // 5 Colunas na Fila: Máquina | Peça | Setup Externo | Status | Senha Liberação (1152)
-      const maquinasRows = (storeAtualizado.maquinas || []).map((m: Maquina) => [
+      // 6 Colunas na Fila: ID | Máquina | Peça | Setup Externo | Status | Senha Liberação (1152)
+      const maquinasRows: (string | number)[][] = (storeAtualizado.maquinas || []).map((m: Maquina, idx: number) => [
+        m.id || String(idx + 1),
         m.maquina,
         m.peca,
         m.setupExternoPronto ? 'SIM' : 'NÃO',
@@ -548,10 +563,10 @@ export class GoogleSheetsService {
         ];
       });
 
-      // Gravar abas na Planilha Google de forma 100% ATÔMICA (SEM CLEAR PARA NUNCA PISCAR / OSCILAR NA TELA)
+      // Gravar abas na Planilha Google de forma 100% ATÔMICA SEM RESTRIÇÃO DE QUANTIDADE
       const dataToBatch: any[] = [];
 
-      // 1. SETUPS_CONCLUIDOS
+      // 1. SETUPS_CONCLUIDOS (Sem limite de registros)
       if (concluidosRows.length > 0) {
         dataToBatch.push({
           range: `SETUPS_CONCLUIDOS!A2:K${concluidosRows.length + 1}`,
@@ -559,7 +574,7 @@ export class GoogleSheetsService {
         });
       }
 
-      // 2. MAQUINAS_FILA (Gravação atômica contínua: preenche com vazios as linhas antigas sem apagar a tela)
+      // 2. MAQUINAS_FILA (Todas as máquinas gravadas sem limites: ID | Máquina | Peça | Setup Externo | Status | Senha)
       const maxRowsMaq = Math.max(maquinasRows.length, this.lastMaxRows.maquinas, 20);
       this.lastMaxRows.maquinas = maxRowsMaq;
       const paddedMaquinasRows: (string | number)[][] = [];
@@ -567,11 +582,11 @@ export class GoogleSheetsService {
         if (i < maquinasRows.length) {
           paddedMaquinasRows.push(maquinasRows[i]);
         } else {
-          paddedMaquinasRows.push(['', '', '', '', '']);
+          paddedMaquinasRows.push(['', '', '', '', '', '']);
         }
       }
       dataToBatch.push({
-        range: `MAQUINAS_FILA!A2:E${1 + maxRowsMaq}`,
+        range: `MAQUINAS_FILA!A2:F${1 + maxRowsMaq}`,
         values: paddedMaquinasRows
       });
 
@@ -622,6 +637,15 @@ export class GoogleSheetsService {
     } finally {
       this.isSyncing = false;
       this.notifyStatus();
+
+      if (this.pendingSyncStore) {
+        this.pendingSyncStore = null;
+        SetupApiService.fetchSync().then((latestStore) => {
+          this.sincronizacaoBidirecional(cleanId, token, latestStore).catch((e) =>
+            console.warn('Erro na sincronização pendente:', e)
+          );
+        });
+      }
     }
   }
 }

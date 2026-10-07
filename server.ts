@@ -517,8 +517,9 @@ class StoreManager {
     }
     if (Array.isArray(novasMaquinas)) {
       if (substituirMaquinas) {
-        // Preserva status de Setup Externo autorizado caso a máquina já estivesse liberada
-        this.data.maquinas = novasMaquinas.map((mNova) => {
+        // 1. Mapeia máquinas vindas da planilha preservando liberação do setup externo
+        const nomesPlanilha = new Set(novasMaquinas.map((m) => m.maquina.toUpperCase()));
+        const maquinasConsolidadas: Maquina[] = novasMaquinas.map((mNova) => {
           const mLocal = this.data.maquinas.find(
             (m) => m.maquina.toUpperCase() === mNova.maquina.toUpperCase()
           );
@@ -527,6 +528,17 @@ class StoreManager {
             setupExternoPronto: mNova.setupExternoPronto || (mLocal ? mLocal.setupExternoPronto : false)
           };
         });
+
+        // 2. PRESERVA qualquer máquina adicionada no app que ainda não estava na planilha!
+        // NUNCA descarta uma máquina em fila cadastrada no app!
+        this.data.maquinas.forEach((mLocal) => {
+          if (!nomesPlanilha.has(mLocal.maquina.toUpperCase())) {
+            maquinasConsolidadas.push(mLocal);
+            nomesPlanilha.add(mLocal.maquina.toUpperCase());
+          }
+        });
+
+        this.data.maquinas = maquinasConsolidadas;
       } else if (novasMaquinas.length > 0) {
         const existingIds = new Set(this.data.maquinas.map((m) => String(m.id)));
         for (const m of novasMaquinas) {

@@ -10,6 +10,12 @@
       "id": "sheet_maq_1_TC09",
       "maquina": "TC09",
       "peca": "BF1458",
+      "setupExternoPronto": true
+    },
+    {
+      "id": "1791377012841",
+      "maquina": "TC16",
+      "peca": "HY789",
       "setupExternoPronto": false
     }
   ],
