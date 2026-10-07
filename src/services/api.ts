@@ -330,12 +330,14 @@ export class SetupApiService {
   public static async mesclarPlanilha(
     concluidos?: SetupConcluido[],
     maquinas?: Maquina[],
-    substituirMaquinas: boolean = false
+    substituirTudo: boolean = true,
+    preparadores?: string[],
+    ativos?: Record<string, SetupAtivo>
   ): Promise<void> {
     const res = await fetch('/api/setup/mesclar-planilha', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ concluidos, maquinas, substituirMaquinas })
+      body: JSON.stringify({ concluidos, maquinas, substituirTudo, preparadores, ativos })
     });
     if (!res.ok) throw new Error('Falha ao mesclar dados da planilha');
     const json = await res.json();

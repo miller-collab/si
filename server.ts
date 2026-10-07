@@ -508,51 +508,68 @@ class StoreManager {
   public sincronizarDePlanilha(
     novosConcluidos?: SetupConcluido[],
     novasMaquinas?: Maquina[],
-    substituirMaquinas: boolean = false
+    substituirTudo: boolean = true,
+    novosPreparadores?: string[],
+    novosAtivos?: Record<string, SetupAtivo>
   ) {
-    if (Array.isArray(novosConcluidos) && novosConcluidos.length > 0) {
-      for (const item of novosConcluidos) {
-        // Encontra registro existente por ID ou por máquina + peça + tempo
-        const existente = this.data.concluidos.find(
-          (c) =>
-            (c.id && item.id && c.id === item.id) ||
-            (c.maquina.toUpperCase() === item.maquina.toUpperCase() &&
-              c.peca.toUpperCase() === item.peca.toUpperCase() &&
-              Math.abs((c.tempoMs || 0) - (item.tempoMs || 0)) < 3000)
-        );
-
-        if (existente) {
-          // Se a planilha marcou SIM ou o app marcou SIM, consolida definitivamente como SIM! Nunca volta para NÃO!
-          if (item.pendenciasConcluidas || existente.pendenciasConcluidas) {
-            existente.pendenciasConcluidas = true;
+    if (substituirTudo) {
+      // A PLANILHA É A FONTE DA VERDADE SOBERANA:
+      // Se o usuário apagou ou editou linhas na planilha, o app acata 100%!
+      if (Array.isArray(novosConcluidos)) {
+        this.data.concluidos = novosConcluidos;
+      }
+      if (Array.isArray(novasMaquinas)) {
+        this.data.maquinas = novasMaquinas;
+      }
+      if (Array.isArray(novosPreparadores) && novosPreparadores.length > 0) {
+        this.data.preparadores = novosPreparadores;
+      }
+      if (novosAtivos && typeof novosAtivos === 'object') {
+        const ativosAtuais = { ...this.data.setupsAtivos };
+        const idsPlanilha = new Set(Object.keys(novosAtivos));
+        for (const id of Object.keys(ativosAtuais)) {
+          if (!idsPlanilha.has(id)) {
+            delete ativosAtuais[id];
           }
-          if (item.id && (!existente.id || existente.id.startsWith('sheet_'))) {
-            existente.id = item.id;
+        }
+        for (const [id, aPlanilha] of Object.entries(novosAtivos)) {
+          if (ativosAtuais[id]) {
+            ativosAtuais[id] = {
+              ...ativosAtuais[id],
+              maquina: aPlanilha.maquina || ativosAtuais[id].maquina,
+              peca: aPlanilha.peca || ativosAtuais[id].peca,
+              modeloAnterior: aPlanilha.modeloAnterior || ativosAtuais[id].modeloAnterior,
+              prep1Val: aPlanilha.prep1Val || ativosAtuais[id].prep1Val,
+              prep2Val: aPlanilha.prep2Val || ativosAtuais[id].prep2Val
+            };
+          } else {
+            ativosAtuais[id] = aPlanilha;
           }
-        } else {
-          this.data.concluidos.unshift(item);
+        }
+        this.data.setupsAtivos = ativosAtuais;
+      }
+    } else {
+      if (Array.isArray(novosConcluidos) && novosConcluidos.length > 0) {
+        for (const item of novosConcluidos) {
+          const idx = this.data.concluidos.findIndex(
+            (c) =>
+              (c.id && item.id && c.id === item.id) ||
+              (c.maquina.toUpperCase() === item.maquina.toUpperCase() &&
+                c.peca.toUpperCase() === item.peca.toUpperCase() &&
+                Math.abs((c.tempoMs || 0) - (item.tempoMs || 0)) < 3000)
+          );
+          if (idx !== -1) {
+            this.data.concluidos[idx] = { ...this.data.concluidos[idx], ...item };
+          } else {
+            this.data.concluidos.unshift(item);
+          }
         }
       }
-    }
-    if (Array.isArray(novasMaquinas)) {
-      if (substituirMaquinas) {
-        // A PLANILHA MANDA EM TUDO: Se o usuário apagou ou alterou linhas na planilha, o app acata 100% diretamente
-        // CIRÚRGICO: Preserva status de setup externo ativo liberado com senha 1152 caso a máquina local já estivesse liberada
-        this.data.maquinas = novasMaquinas.map((mNova) => {
-          const mLocal = this.data.maquinas.find(
-            (ml) => ml.maquina.toUpperCase() === mNova.maquina.toUpperCase()
-          );
-          if (mLocal?.setupExternoPronto && !mNova.setupExternoPronto) {
-            return { ...mNova, setupExternoPronto: true };
-          }
-          return mNova;
-        });
-      } else if (novasMaquinas.length > 0) {
-        const existingIds = new Set(this.data.maquinas.map((m) => String(m.id)));
+      if (Array.isArray(novasMaquinas) && novasMaquinas.length > 0) {
+        const existingMap = new Map(this.data.maquinas.map((m) => [m.maquina.toUpperCase(), m]));
         for (const m of novasMaquinas) {
-          if (!existingIds.has(String(m.id))) {
+          if (!existingMap.has(m.maquina.toUpperCase())) {
             this.data.maquinas.push(m);
-            existingIds.add(String(m.id));
           }
         }
       }
@@ -775,8 +792,14 @@ async function startServer() {
   });
 
   app.post('/api/setup/mesclar-planilha', (req, res) => {
-    const { concluidos, maquinas, substituirMaquinas } = req.body;
-    store.sincronizarDePlanilha(concluidos, maquinas, Boolean(substituirMaquinas));
+    const { concluidos, maquinas, substituirMaquinas, substituirTudo, preparadores, ativos } = req.body;
+    store.sincronizarDePlanilha(
+      concluidos,
+      maquinas,
+      Boolean(substituirTudo ?? substituirMaquinas ?? true),
+      preparadores,
+      ativos
+    );
     res.json({ sucesso: true, data: store.getData() });
   });
 

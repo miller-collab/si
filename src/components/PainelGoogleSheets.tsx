@@ -286,13 +286,19 @@ export const PainelGoogleSheets: React.FC<PainelGoogleSheetsProps> = ({
     try {
       const dadosPlanilha = await GoogleSheetsService.puxarDadosDaPlanilha(spreadsheetId, tokenAtual);
 
-      await SetupApiService.mesclarPlanilha(dadosPlanilha.concluidos, dadosPlanilha.maquinas);
+      await SetupApiService.mesclarPlanilha(
+        dadosPlanilha.concluidos,
+        dadosPlanilha.maquinas,
+        true,
+        dadosPlanilha.preparadores,
+        dadosPlanilha.ativos
+      );
 
       setStatusMsg({
         tipo: 'sucesso',
-        texto: `Dados restaurados da planilha com sucesso! (${dadosPlanilha.concluidos.length} relatórios concluídos e ${dadosPlanilha.maquinas.length} máquinas).`
+        texto: `Dados sincronizados da planilha com sucesso! (${dadosPlanilha.concluidos.length} concluídos, ${dadosPlanilha.maquinas.length} máquinas, ${dadosPlanilha.preparadores.length} preparadores).`
       });
-      onShowToast('Informações restauradas da planilha Google!');
+      onShowToast('Informações alinhadas com a planilha Google!');
       await aoAtualizarStore();
     } catch (err: any) {
       setStatusMsg({ tipo: 'erro', texto: err.message || 'Erro ao puxar dados da planilha.' });

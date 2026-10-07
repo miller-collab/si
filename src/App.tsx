@@ -83,36 +83,38 @@ export default function App() {
   // 30-second auto-sync loop state (Foto 1)
   const [segundosParaSync, setSegundosParaSync] = useState(30);
   const [sincronizando, setSincronizando] = useState(false);
-  const ultimaAtividadeRef = useRef(Date.now());
   const sincronizandoRef = useRef(false);
-  const autoSaveSheetsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch data & optionally sync automatically to Google Sheets
-  const carregarDados = useCallback(async (sincronizarComPlanilha = false, forcarImediato = false) => {
+  const carregarDados = useCallback(async (sincronizarComPlanilha = false, forcarImediato = false, origemMudancaApp = false) => {
     try {
-      const data = await SetupApiService.fetchSync();
+      let data = await SetupApiService.fetchSync();
       setStoreData(data);
       checarTurno(data.turnoConfig);
       setOnline(true);
 
-      // Sincronização Bidirecional com a Planilha Google (respeitando intervalo de 10 segundos)
+      // Sincronização Bidirecional Soberana com a Planilha Google:
+      // Se origemMudancaApp = false (leitura a cada 30s ou botão de sync): alinha o app com a planilha sem sobrescrever a planilha!
+      // Se origemMudancaApp = true: grava o estado na planilha
       if (sincronizarComPlanilha && data.sheetConfig?.spreadsheetId) {
-        getAccessToken().then((tok) => {
+        try {
+          const tok = await getAccessToken();
           if (tok) {
-            GoogleSheetsService.sincronizacaoBidirecional(
-              data.sheetConfig!.spreadsheetId,
+            const res = await GoogleSheetsService.sincronizacaoBidirecional(
+              data.sheetConfig.spreadsheetId,
               tok,
               data,
-              forcarImediato
-            )
-              .then((res) => {
-                if (res?.storeAtualizado) {
-                  setStoreData(res.storeAtualizado);
-                }
-              })
-              .catch((e) => console.warn('Erro na sincronização bidirecional Google Sheets:', e));
+              forcarImediato,
+              origemMudancaApp
+            );
+            if (res?.storeAtualizado) {
+              setStoreData(res.storeAtualizado);
+              data = res.storeAtualizado;
+            }
           }
-        });
+        } catch (e) {
+          console.warn('Erro na sincronização Google Sheets:', e);
+        }
       }
 
       return data;
@@ -130,7 +132,10 @@ export default function App() {
     sincronizandoRef.current = true;
     setSincronizando(true);
     try {
-      await carregarDados(true, forcar);
+      // Sincronização periódica da nuvem (Foto 1):
+      // A Planilha é a Fonte Soberana da Verdade -> Apenas LÊ da planilha e alinha o app!
+      // NUNCA escreve de volta na planilha para que edições e exclusões manuais na planilha sejam 100% respeitadas!
+      await carregarDados(true, forcar, false);
     } finally {
       setSegundosParaSync(30);
       sincronizandoRef.current = false;
@@ -139,6 +144,7 @@ export default function App() {
   }, [carregarDados]);
 
   useEffect(() => {
+    // Carrega inicial sincronizando da planilha se configurada
     carregarDados(true);
 
     // Listen to local cache updates
@@ -147,17 +153,7 @@ export default function App() {
       checarTurno(data.turnoConfig);
     });
 
-    // Reset inactivity timer when user interacts with tablet
-    const resetAtividade = () => {
-      ultimaAtividadeRef.current = Date.now();
-    };
-
-    window.addEventListener('pointerdown', resetAtividade, { passive: true });
-    window.addEventListener('touchstart', resetAtividade, { passive: true });
-    window.addEventListener('keydown', resetAtividade, { passive: true });
-    window.addEventListener('mousemove', resetAtividade, { passive: true });
-
-    // Wakeup on focus / visibilitychange (Photo 2 - when tablet screen turns on or tab is viewed)
+    // Wakeup on focus / visibilitychange (quando a tela liga ou a aba é focada)
     const onVisibilidadeChange = () => {
       if (document.visibilityState === 'visible') {
         sincronizarAgora();
@@ -170,16 +166,16 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisibilidadeChange);
     window.addEventListener('focus', onWindowFocus);
 
-    // 30-second auto-sync loop if nobody is interacting (Foto 1)
-    const intervalOcioso = setInterval(() => {
-      const segundosSemInteracao = Math.floor((Date.now() - ultimaAtividadeRef.current) / 1000);
-      const restantes = Math.max(0, 30 - (segundosSemInteracao % 30));
-      setSegundosParaSync(restantes);
-
-      // When reaching 30s idle loop or cycling every 30s idle
-      if (segundosSemInteracao > 0 && segundosSemInteracao % 30 === 0) {
-        sincronizarAgora();
-      }
+    // Ciclo de sincronização automática com a planilha Google a cada 30 segundos (Foto 1)
+    // Apenas lê da planilha e alinha o app 100% de acordo com as informações da planilha
+    const intervalAutoSync = setInterval(() => {
+      setSegundosParaSync((prev) => {
+        if (prev <= 1) {
+          sincronizarAgora();
+          return 30;
+        }
+        return prev - 1;
+      });
     }, 1000);
 
     // Light background poll every 4 seconds to sync between multiple tablets
@@ -199,13 +195,9 @@ export default function App() {
 
     return () => {
       unsubscribe();
-      window.removeEventListener('pointerdown', resetAtividade);
-      window.removeEventListener('touchstart', resetAtividade);
-      window.removeEventListener('keydown', resetAtividade);
-      window.removeEventListener('mousemove', resetAtividade);
       document.removeEventListener('visibilitychange', onVisibilidadeChange);
       window.removeEventListener('focus', onWindowFocus);
-      clearInterval(intervalOcioso);
+      clearInterval(intervalAutoSync);
       clearInterval(syncInterval);
       clearInterval(turnoInterval);
     };
@@ -216,9 +208,21 @@ export default function App() {
     setMaquinaParaIniciar(null);
     try {
       await SetupApiService.iniciarSetup(maquina.id, maquina.maquina, maquina.peca, modeloAnterior);
-      await carregarDados(true);
+      const updatedData = await carregarDados(false);
       setAbaAtiva('ativos');
-      showToast(`Setup iniciado para a máquina ${maquina.maquina}! Gravado na planilha.`);
+      showToast(`Setup iniciado para a máquina ${maquina.maquina}!`);
+
+      if (updatedData?.sheetConfig?.spreadsheetId) {
+        getAccessToken().then((tok) => {
+          if (tok) {
+            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
+              updatedData.sheetConfig!.spreadsheetId,
+              tok,
+              updatedData.setupsAtivos
+            ).catch(console.warn);
+          }
+        });
+      }
     } catch (err) {
       console.error(err);
       showToast('Erro ao iniciar setup.');
@@ -236,16 +240,6 @@ export default function App() {
   ) => {
     try {
       await SetupApiService.autoSaveCard(id, prep1Val, prep2Val, checks1, checks2, checksPend, tempoDecorridoMs);
-
-      // Auto-gravação em segundo plano na planilha Google com debounce de 10 segundos para não sobrecarregar
-      if (storeData.sheetConfig?.spreadsheetId) {
-        if (autoSaveSheetsTimerRef.current) {
-          clearTimeout(autoSaveSheetsTimerRef.current);
-        }
-        autoSaveSheetsTimerRef.current = setTimeout(async () => {
-          await carregarDados(true, false);
-        }, 10000);
-      }
     } catch (err) {
       console.error('Erro no auto-save:', err);
     }
@@ -254,8 +248,20 @@ export default function App() {
   const handleDesconto = async (id: string, tipo: 'cafe' | 'almoco') => {
     try {
       await SetupApiService.aplicarDesconto(id, tipo);
-      await carregarDados(true);
+      const updatedData = await carregarDados(false);
       showToast(tipo === 'cafe' ? 'Intervalo de café descontado (-15m)' : 'Intervalo de almoço descontado (-1.5h)');
+
+      if (updatedData?.sheetConfig?.spreadsheetId) {
+        getAccessToken().then((tok) => {
+          if (tok) {
+            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
+              updatedData.sheetConfig!.spreadsheetId,
+              tok,
+              updatedData.setupsAtivos
+            ).catch(console.warn);
+          }
+        });
+      }
     } catch (err) {
       console.error(err);
       showToast('Erro ao aplicar desconto.');
@@ -265,8 +271,20 @@ export default function App() {
   const handleIniciarParada = async (id: string, motivo: string) => {
     try {
       await SetupApiService.iniciarParada(id, motivo);
-      await carregarDados(true);
-      showToast('Parada iniciada! Relógio em andamento gravado na planilha.');
+      const updatedData = await carregarDados(false);
+      showToast('Parada iniciada! Relógio em andamento.');
+
+      if (updatedData?.sheetConfig?.spreadsheetId) {
+        getAccessToken().then((tok) => {
+          if (tok) {
+            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
+              updatedData.sheetConfig!.spreadsheetId,
+              tok,
+              updatedData.setupsAtivos
+            ).catch(console.warn);
+          }
+        });
+      }
     } catch (err) {
       console.error(err);
       showToast('Erro ao iniciar parada.');
@@ -276,8 +294,20 @@ export default function App() {
   const handleFinalizarParada = async (id: string, motivo: string) => {
     try {
       await SetupApiService.finalizarParada(id, motivo);
-      await carregarDados(true);
-      showToast('Motivo da parada gravado! Setup retomado e sincronizado na planilha.');
+      const updatedData = await carregarDados(false);
+      showToast('Motivo da parada gravado! Setup retomado.');
+
+      if (updatedData?.sheetConfig?.spreadsheetId) {
+        getAccessToken().then((tok) => {
+          if (tok) {
+            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
+              updatedData.sheetConfig!.spreadsheetId,
+              tok,
+              updatedData.setupsAtivos
+            ).catch(console.warn);
+          }
+        });
+      }
     } catch (err) {
       console.error(err);
       showToast('Erro ao finalizar parada.');
@@ -293,8 +323,28 @@ export default function App() {
   ) => {
     try {
       await SetupApiService.liberarMaquina(id, prep1, prep2, tempoFormatado, tempoMs);
-      await carregarDados(true);
-      showToast(`Máquina liberada para produção! Tempo registrado na Planilha Google: ${tempoFormatado}.`);
+      const updatedData = await carregarDados(false);
+      showToast(`Máquina liberada para produção! Tempo: ${tempoFormatado}.`);
+
+      if (updatedData?.sheetConfig?.spreadsheetId) {
+        const setupConcluidoRecente = updatedData.concluidos?.[0];
+        getAccessToken().then((tok) => {
+          if (tok) {
+            if (setupConcluidoRecente) {
+              GoogleSheetsService.registrarSetupConcluido(
+                updatedData.sheetConfig!.spreadsheetId,
+                tok,
+                setupConcluidoRecente
+              ).catch(console.warn);
+            }
+            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
+              updatedData.sheetConfig!.spreadsheetId,
+              tok,
+              updatedData.setupsAtivos
+            ).catch(console.warn);
+          }
+        });
+      }
     } catch (err) {
       console.error(err);
       showToast('Erro ao liberar máquina.');
@@ -304,10 +354,22 @@ export default function App() {
   const handleEncerrarPendencias = async (id: string) => {
     try {
       await SetupApiService.encerrarPendencias(id);
-      await carregarDados(true);
-      showToast('Todas as pendências foram concluídas. Setup arquivado e sincronizado!');
+      const updatedData = await carregarDados(false);
+      showToast('Todas as pendências foram concluídas. Setup arquivado!');
       if (Object.keys(storeData.setupsAtivos).length <= 1) {
         setAbaAtiva('concluidos');
+      }
+
+      if (updatedData?.sheetConfig?.spreadsheetId) {
+        getAccessToken().then((tok) => {
+          if (tok) {
+            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
+              updatedData.sheetConfig!.spreadsheetId,
+              tok,
+              updatedData.setupsAtivos
+            ).catch(console.warn);
+          }
+        });
       }
     } catch (err) {
       console.error(err);
@@ -318,8 +380,20 @@ export default function App() {
   const handleToggleSetupExterno = async (maquinaId: string, senha: string) => {
     try {
       await SetupApiService.toggleSetupExterno(maquinaId, senha);
-      await carregarDados(true, true);
-      showToast('Status de Setup Externo autorizado com senha 1152 e gravado na planilha!');
+      const updatedData = await carregarDados(false);
+      showToast('Status de Setup Externo autorizado com senha 1152!');
+
+      if (updatedData?.sheetConfig?.spreadsheetId) {
+        getAccessToken().then((tok) => {
+          if (tok) {
+            GoogleSheetsService.atualizarMaquinasFilaNaPlanilha(
+              updatedData.sheetConfig!.spreadsheetId,
+              tok,
+              updatedData.maquinas
+            ).catch(console.warn);
+          }
+        });
+      }
     } catch (err: any) {
       showToast(err.message || 'Senha incorreta!');
       throw err;
@@ -328,39 +402,87 @@ export default function App() {
 
   const handleDeletarMaquina = async (maquinaId: string, senha: string) => {
     await SetupApiService.deletarMaquina(maquinaId, senha);
-    await carregarDados(true, true);
-    showToast('Máquina removida da fila e da planilha!');
+    const updatedData = await carregarDados(false);
+    showToast('Máquina removida da fila!');
+
+    if (updatedData?.sheetConfig?.spreadsheetId) {
+      getAccessToken().then((tok) => {
+        if (tok) {
+          GoogleSheetsService.atualizarMaquinasFilaNaPlanilha(
+            updatedData.sheetConfig!.spreadsheetId,
+            tok,
+            updatedData.maquinas
+          ).catch(console.warn);
+        }
+      });
+    }
   };
 
   const handleLimparMaquinas = async (senha: string) => {
     await SetupApiService.limparMaquinas(senha);
-    await carregarDados(true);
+    const updatedData = await carregarDados(false);
     showToast('Fila de máquinas limpa com sucesso!');
+
+    if (updatedData?.sheetConfig?.spreadsheetId) {
+      getAccessToken().then((tok) => {
+        if (tok) {
+          GoogleSheetsService.atualizarMaquinasFilaNaPlanilha(
+            updatedData.sheetConfig!.spreadsheetId,
+            tok,
+            []
+          ).catch(console.warn);
+        }
+      });
+    }
   };
 
   const handleDeletarPreparador = async (nome: string, senha: string) => {
     await SetupApiService.deletarPreparador(nome, senha);
-    await carregarDados(true);
+    const updatedData = await carregarDados(false);
     showToast(`Preparador ${nome} removido!`);
+
+    if (updatedData?.sheetConfig?.spreadsheetId) {
+      getAccessToken().then((tok) => {
+        if (tok) {
+          GoogleSheetsService.atualizarPreparadoresNaPlanilha(
+            updatedData.sheetConfig!.spreadsheetId,
+            tok,
+            updatedData.preparadores
+          ).catch(console.warn);
+        }
+      });
+    }
   };
 
   const handleSalvarTurno = async (config: TurnoConfig, senha: string) => {
     await SetupApiService.salvarTurno(config, senha);
-    await carregarDados(true);
+    await carregarDados(false);
     showToast('Horários de turno atualizados e sincronizados!');
   };
 
   const handleSalvarTarefas = async (grupo: 'parte1' | 'parte2' | 'pendencias', tarefas: string[], senha: string) => {
     await SetupApiService.salvarTarefas(grupo, tarefas, senha);
-    await carregarDados(true);
+    await carregarDados(false);
     showToast('Atividades do checklist salvas!');
   };
 
   const handleAdicionarPreparador = async (nome: string) => {
     try {
       await SetupApiService.adicionarPreparador(nome);
-      await carregarDados(true);
+      const updatedData = await carregarDados(false);
       showToast(`Preparador ${nome} adicionado com sucesso!`);
+
+      if (updatedData?.sheetConfig?.spreadsheetId) {
+        getAccessToken().then((tok) => {
+          if (tok) {
+            GoogleSheetsService.atualizarPreparadoresNaPlanilha(
+              updatedData.sheetConfig!.spreadsheetId,
+              tok,
+              updatedData.preparadores
+            ).catch(console.warn);
+          }
+        });
+      }
     } catch (err) {
       console.error(err);
       showToast('Erro ao adicionar preparador.');
@@ -370,19 +492,20 @@ export default function App() {
   const handleAdicionarMaquina = async (maquina: string, peca: string) => {
     try {
       await SetupApiService.adicionarMaquina(maquina, peca);
-      if (storeData.sheetConfig?.spreadsheetId) {
+      const updatedData = await carregarDados(false);
+      showToast(`Máquina ${maquina} adicionada à fila!`);
+
+      if (updatedData?.sheetConfig?.spreadsheetId) {
         getAccessToken().then((tok) => {
           if (tok) {
             GoogleSheetsService.adicionarMaquinaNaPlanilha(
-              storeData.sheetConfig!.spreadsheetId,
+              updatedData.sheetConfig!.spreadsheetId,
               tok,
               { maquina, peca }
             ).catch((e) => console.warn('Erro ao adicionar máquina na planilha:', e));
           }
         });
       }
-      await carregarDados(true, true);
-      showToast(`Máquina ${maquina} adicionada à fila e à Planilha Google!`);
     } catch (err) {
       console.error(err);
       showToast('Erro ao adicionar máquina.');
