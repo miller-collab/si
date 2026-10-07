@@ -95,15 +95,21 @@ export default function App() {
       checarTurno(data.turnoConfig);
       setOnline(true);
 
-      // Auto-gravação em tempo real na Planilha Google
+      // Sincronização Bidirecional em tempo real com a Planilha Google (A Planilha é o Centro de Tudo)
       if (sincronizarComPlanilha && data.sheetConfig?.spreadsheetId) {
         getAccessToken().then((tok) => {
           if (tok) {
-            GoogleSheetsService.sincronizarTudoParaPlanilha(
+            GoogleSheetsService.sincronizacaoBidirecional(
               data.sheetConfig!.spreadsheetId,
               tok,
               data
-            ).catch((e) => console.warn('Erro na sincronização automática Google Sheets:', e));
+            )
+              .then((res) => {
+                if (res?.storeAtualizado) {
+                  setStoreData(res.storeAtualizado);
+                }
+              })
+              .catch((e) => console.warn('Erro na sincronização bidirecional Google Sheets:', e));
           }
         });
       }
@@ -132,7 +138,7 @@ export default function App() {
   }, [carregarDados]);
 
   useEffect(() => {
-    carregarDados();
+    carregarDados(true);
 
     // Listen to local cache updates
     const unsubscribe = SetupApiService.subscribe((data) => {

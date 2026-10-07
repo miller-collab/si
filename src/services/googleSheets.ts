@@ -1,4 +1,5 @@
 import type { StoreData, SetupConcluido, SetupAtivo, Maquina } from '../types';
+import { SetupApiService } from './api';
 
 export interface SheetInfo {
   id: string;
@@ -207,11 +208,11 @@ export class GoogleSheetsService {
     ];
 
     const headersMaquinas = [
-      'ID',
       'Máquina',
       'Peça',
       'Setup Externo Pronto',
-      'Status'
+      'Status',
+      'Senha Liberação (1152)'
     ];
 
     const headersAtivos = [
@@ -442,7 +443,7 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Puxa os dados registrados na planilha Google para restaurar a memória do sistema
+   * Puxa os dados registrados na planilha Google para restaurar e sincronizar a memória do sistema
    */
   public static async puxarDadosDaPlanilha(
     spreadsheetId: string,
@@ -498,9 +499,9 @@ export class GoogleSheetsService {
       });
     }
 
-    // 2. Ler MAQUINAS_FILA
+    // 2. Ler MAQUINAS_FILA (Lê colunas A até G e suporta senha 1152 em coluna própria)
     const resMaq = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/MAQUINAS_FILA!A2:E200`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/MAQUINAS_FILA!A2:G200`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -508,18 +509,242 @@ export class GoogleSheetsService {
     if (resMaq.ok) {
       const dataMaq = await resMaq.json();
       const rows = dataMaq.values || [];
-      rows.forEach((r: any[]) => {
-        if (!r || !r[1] || !r[2]) return;
-        const [idStr, maquina, peca, extProntoStr] = r;
-        maquinas.push({
-          id: idStr || String(Date.now() + Math.random()),
-          maquina: String(maquina || '').toUpperCase(),
-          peca: String(peca || '').toUpperCase(),
-          setupExternoPronto: String(extProntoStr).toUpperCase() === 'SIM'
+      rows.forEach((r: any[], idx: number) => {
+        if (!r || r.length === 0) return;
+
+        let maqName = '';
+        let pecaName = '';
+        let rowId = '';
+
+        // Detecta se Coluna A é ID do sistema (timestamp longo ou inicia com maq_ / sheet_)
+        if (
+          r.length >= 3 &&
+          (/^\d{8,}$/.test(String(r[0]).trim()) ||
+            String(r[0]).startsWith('maq_') ||
+            String(r[0]).startsWith('sheet_'))
+        ) {
+          rowId = String(r[0]).trim();
+          maqName = String(r[1] || '').trim();
+          pecaName = String(r[2] || '').trim();
+        } else {
+          // Formato direto de digitação na planilha Google: Coluna A = Máquina, Coluna B = Peça
+          maqName = String(r[0] || '').trim();
+          pecaName = String(r[1] || '').trim();
+          rowId = `sheet_maq_${idx}_${maqName}`;
+        }
+
+        // LÓGICA CIRÚRGICA DE SENHA E STATUS DE SETUP EXTERNO:
+        // Se a coluna "Senha Liberação (1152)" ou qualquer célula contiver a senha '1152'
+        // OU contiver 'SIM', 'LIBERADO', 'OK', 'PRONTO':
+        // -> A luz do Setup Externo fica ATIVADA no app!
+        const temSenha1152 = r.some((c) => String(c || '').trim() === '1152');
+        const temSim = r.some((c) => {
+          const v = String(c || '').trim().toUpperCase();
+          return v === 'SIM' || v === 'LIBERADO' || v === 'OK' || v === 'PRONTO';
         });
+
+        const extPronto = temSenha1152 || temSim;
+
+        const maqUpper = maqName.toUpperCase();
+        if (
+          maqUpper &&
+          maqUpper !== '-' &&
+          maqUpper !== 'MÁQUINA' &&
+          maqUpper !== 'MAQUINA'
+        ) {
+          maquinas.push({
+            id: rowId,
+            maquina: maqUpper,
+            peca: (pecaName || 'PRODUÇÃO').toUpperCase(),
+            setupExternoPronto: extPronto
+          });
+        }
       });
     }
 
     return { concluidos, maquinas };
+  }
+
+  /**
+   * Sincronização Bidirecional Total:
+   * A Planilha é o Centro de Tudo. Lê a fila de máquinas e setups da planilha e mescla com o app em tempo real.
+   */
+  public static async sincronizacaoBidirecional(
+    spreadsheetId: string,
+    token: string,
+    store: StoreData
+  ): Promise<{ sucesso: boolean; mensagem: string; storeAtualizado: StoreData }> {
+    const cleanId = this.extrairSpreadsheetId(spreadsheetId);
+    if (!cleanId) throw new Error('ID da Planilha não configurado.');
+
+    if (this.isSyncing) {
+      return { sucesso: true, mensagem: 'Sincronização em andamento', storeAtualizado: store };
+    }
+
+    this.isSyncing = true;
+    this.notifyStatus();
+
+    try {
+      if (!this.abasValidadasIds.has(cleanId)) {
+        await this.garantirAbas(cleanId, token);
+        this.abasValidadasIds.add(cleanId);
+      }
+
+      // 1. Ler da Planilha Google (Fonte da Verdade)
+      const dadosPlanilha = await this.puxarDadosDaPlanilha(cleanId, token);
+
+      // Preservar autorizações locais feitas com senha no app para não haver flicker/piscar
+      const statusExternoLocal = new Map<string, boolean>();
+      (store.maquinas || []).forEach((m) => {
+        if (m.setupExternoPronto) {
+          statusExternoLocal.set(m.maquina.toUpperCase(), true);
+          statusExternoLocal.set(`${m.maquina}_${m.peca}`.toUpperCase(), true);
+        }
+      });
+
+      // Se a planilha tem a senha 1152/SIM OU o app acabou de autorizar, a luz fica ATIVADA
+      const maquinasSheetNomes = new Set(dadosPlanilha.maquinas.map((m) => `${m.maquina}_${m.peca}`.toUpperCase()));
+      let listaMaquinasFinal = dadosPlanilha.maquinas.map((mSheet) => {
+        const autorizadoNoApp =
+          statusExternoLocal.get(mSheet.maquina.toUpperCase()) ||
+          statusExternoLocal.get(`${mSheet.maquina}_${mSheet.peca}`.toUpperCase()) ||
+          false;
+        return {
+          ...mSheet,
+          setupExternoPronto: mSheet.setupExternoPronto || autorizadoNoApp
+        };
+      });
+
+      (store.maquinas || []).forEach((mLocal) => {
+        const chave = `${mLocal.maquina}_${mLocal.peca}`.toUpperCase();
+        if (!maquinasSheetNomes.has(chave)) {
+          listaMaquinasFinal.push({
+            ...mLocal,
+            setupExternoPronto: Boolean(mLocal.setupExternoPronto)
+          });
+          maquinasSheetNomes.add(chave);
+        }
+      });
+
+      // 2. Mesclar no backend da aplicação
+      await SetupApiService.mesclarPlanilha(dadosPlanilha.concluidos, listaMaquinasFinal, true);
+      const storeAtualizado = await SetupApiService.fetchSync();
+
+      // 3. Atualizar a Planilha com o estado completo consolidado
+      const concluidosRows = (storeAtualizado.concluidos || []).map((c: SetupConcluido) => [
+        c.data,
+        c.maquina,
+        c.peca,
+        c.modeloAnterior || '-',
+        c.prep1 || '-',
+        c.prep2 || '-',
+        c.tempo,
+        c.tempoMs,
+        c.pendenciasConcluidas ? 'SIM' : 'NÃO',
+        c.historico || '',
+        c.id
+      ]);
+
+      // 5 Colunas na Fila: Máquina | Peça | Setup Externo | Status | Senha Liberação (1152)
+      const maquinasRows = (storeAtualizado.maquinas || []).map((m: Maquina) => [
+        m.maquina,
+        m.peca,
+        m.setupExternoPronto ? 'SIM' : 'NÃO',
+        m.setupExternoPronto ? 'LIBERADO PARA SETUP' : 'AGUARDANDO INÍCIO',
+        m.setupExternoPronto ? '1152' : ''
+      ]);
+
+      const ativosList: SetupAtivo[] = Object.values(storeAtualizado.setupsAtivos || {});
+      const ativosRows = ativosList.map((a: SetupAtivo) => {
+        const horaDh = new Date(a.updatedAt).toLocaleTimeString('pt-BR', {
+          timeZone: 'America/Sao_Paulo'
+        });
+        const historicoResumo = (a.historico || []).slice(-3).join(' | ');
+        return [
+          a.id,
+          a.maquina,
+          a.peca,
+          a.modeloAnterior || '-',
+          a.prep1Val || '-',
+          a.prep2Val || '-',
+          a.dataInicio,
+          `${Math.floor(a.tempoDecorridoMs / 60000)} min`,
+          a.paradaAtiva ? `PARADA: ${a.paradaAtual?.motivo || 'Em andamento'}` : 'EM PRODUÇÃO',
+          historicoResumo || '-',
+          horaDh
+        ];
+      });
+
+      // Gravar abas na Planilha Google
+      const dataToBatch: any[] = [];
+
+      // SETUPS_CONCLUIDOS
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/SETUPS_CONCLUIDOS!A2:K1000:clear`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (concluidosRows.length > 0) {
+        dataToBatch.push({
+          range: `SETUPS_CONCLUIDOS!A2:K${concluidosRows.length + 1}`,
+          values: concluidosRows
+        });
+      }
+
+      // MAQUINAS_FILA (Salva 5 colunas: Máquina | Peça | Setup Externo | Status | Senha Liberação)
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/MAQUINAS_FILA!A2:E200:clear`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (maquinasRows.length > 0) {
+        dataToBatch.push({
+          range: `MAQUINAS_FILA!A2:E${maquinasRows.length + 1}`,
+          values: maquinasRows
+        });
+      }
+
+      // SETUPS_ATIVOS
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/SETUPS_ATIVOS!A2:K100:clear`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (ativosRows.length > 0) {
+        dataToBatch.push({
+          range: `SETUPS_ATIVOS!A2:K${ativosRows.length + 1}`,
+          values: ativosRows
+        });
+      }
+
+      if (dataToBatch.length > 0) {
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values:batchUpdate`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            valueInputOption: 'USER_ENTERED',
+            data: dataToBatch
+          })
+        });
+      }
+
+      const horaNow = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      this.lastSyncTime = horaNow;
+      this.lastError = null;
+      this.notifyStatus();
+
+      return {
+        sucesso: true,
+        mensagem: `Sincronização bidirecional realizada com sucesso às ${horaNow}.`,
+        storeAtualizado
+      };
+    } catch (err: any) {
+      this.lastError = err.message || 'Erro na sincronização bidirecional';
+      this.notifyStatus();
+      throw err;
+    } finally {
+      this.isSyncing = false;
+      this.notifyStatus();
+    }
   }
 }

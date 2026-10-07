@@ -501,9 +501,13 @@ class StoreManager {
     this.save();
   }
 
-  public sincronizarDePlanilha(novosConcluidos?: SetupConcluido[], novasMaquinas?: Maquina[]) {
+  public sincronizarDePlanilha(
+    novosConcluidos?: SetupConcluido[],
+    novasMaquinas?: Maquina[],
+    substituirMaquinas: boolean = false
+  ) {
     if (Array.isArray(novosConcluidos) && novosConcluidos.length > 0) {
-      const existingIds = new Set(this.data.concluidos.map(c => c.id));
+      const existingIds = new Set(this.data.concluidos.map((c) => c.id));
       for (const item of novosConcluidos) {
         if (!existingIds.has(item.id)) {
           this.data.concluidos.unshift(item);
@@ -511,12 +515,25 @@ class StoreManager {
         }
       }
     }
-    if (Array.isArray(novasMaquinas) && novasMaquinas.length > 0) {
-      const existingIds = new Set(this.data.maquinas.map(m => String(m.id)));
-      for (const m of novasMaquinas) {
-        if (!existingIds.has(String(m.id))) {
-          this.data.maquinas.push(m);
-          existingIds.add(String(m.id));
+    if (Array.isArray(novasMaquinas)) {
+      if (substituirMaquinas) {
+        // Preserva status de Setup Externo autorizado caso a máquina já estivesse liberada
+        this.data.maquinas = novasMaquinas.map((mNova) => {
+          const mLocal = this.data.maquinas.find(
+            (m) => m.maquina.toUpperCase() === mNova.maquina.toUpperCase()
+          );
+          return {
+            ...mNova,
+            setupExternoPronto: mNova.setupExternoPronto || (mLocal ? mLocal.setupExternoPronto : false)
+          };
+        });
+      } else if (novasMaquinas.length > 0) {
+        const existingIds = new Set(this.data.maquinas.map((m) => String(m.id)));
+        for (const m of novasMaquinas) {
+          if (!existingIds.has(String(m.id))) {
+            this.data.maquinas.push(m);
+            existingIds.add(String(m.id));
+          }
         }
       }
     }
@@ -738,8 +755,8 @@ async function startServer() {
   });
 
   app.post('/api/setup/mesclar-planilha', (req, res) => {
-    const { concluidos, maquinas } = req.body;
-    store.sincronizarDePlanilha(concluidos, maquinas);
+    const { concluidos, maquinas, substituirMaquinas } = req.body;
+    store.sincronizarDePlanilha(concluidos, maquinas, Boolean(substituirMaquinas));
     res.json({ sucesso: true, data: store.getData() });
   });
 

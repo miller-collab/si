@@ -1,5 +1,18 @@
 {
-  "maquinas": [],
+  "maquinas": [
+    {
+      "id": "sheet_maq_0_TC12",
+      "maquina": "TC12",
+      "peca": "PL122",
+      "setupExternoPronto": true
+    },
+    {
+      "id": "sheet_maq_1_TC09",
+      "maquina": "TC09",
+      "peca": "BF1458",
+      "setupExternoPronto": false
+    }
+  ],
   "preparadores": [
     "GABRIEL",
     "CAIO",
@@ -56,5 +69,13 @@
     "fim": "17:00"
   },
   "setupsAtivos": {},
-  "concluidos": []
+  "concluidos": [],
+  "sheetConfig": {
+    "spreadsheetId": "1jXncBCooTpLgXCeB19V2PdhcSQEc-ETqoL-dmTHmLC0",
+    "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1jXncBCooTpLgXCeB19V2PdhcSQEc-ETqoL-dmTHmLC0/edit?gid=1557080322#gid=1557080322",
+    "spreadsheetTitle": "SETUPINTERNO",
+    "autoSyncAtivo": true,
+    "ultimaSync": "07/10/2026, 08:36:25",
+    "sincronizadoPor": "miller@ds.ind.br"
+  }
 }
