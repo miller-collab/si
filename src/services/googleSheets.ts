@@ -20,6 +20,11 @@ export class GoogleSheetsService {
   private static listeners: Array<(status: SheetSyncStatus) => void> = [];
   private static lastSyncTime: string | null = null;
   private static lastError: string | null = null;
+  private static lastMaxRows = {
+    maquinas: 25,
+    ativos: 15,
+    concluidos: 50
+  };
 
   public static subscribeStatus(listener: (status: SheetSyncStatus) => void) {
     this.listeners.push(listener);
@@ -299,147 +304,15 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Sincroniza todo o estado da fábrica para a planilha Google
+   * Sincroniza o estado da fábrica para a planilha Google utilizando escrita atômica contínua sem piscar
    */
   public static async sincronizarTudoParaPlanilha(
     spreadsheetId: string,
     token: string,
     store: StoreData
   ): Promise<{ sucesso: boolean; mensagem: string }> {
-    const cleanId = this.extrairSpreadsheetId(spreadsheetId);
-    if (!cleanId) throw new Error('ID da Planilha não configurado.');
-
-    if (this.isSyncing) {
-      this.pendingSyncStore = store;
-      return { sucesso: true, mensagem: 'Sincronização em andamento, próxima gravação agendada.' };
-    }
-
-    this.isSyncing = true;
-    this.notifyStatus();
-
-    try {
-      if (!this.abasValidadasIds.has(cleanId)) {
-        await this.garantirAbas(cleanId, token);
-        this.abasValidadasIds.add(cleanId);
-      }
-
-      // 1. Atualizar SETUPS_CONCLUIDOS
-      const concluidosRows = (store.concluidos || []).map((c) => [
-        c.data,
-        c.maquina,
-        c.peca,
-        c.modeloAnterior || '-',
-        c.prep1 || '-',
-        c.prep2 || '-',
-        c.tempo,
-        c.tempoMs,
-        c.pendenciasConcluidas ? 'SIM' : 'NÃO',
-        c.historico || '',
-        c.id
-      ]);
-
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/SETUPS_CONCLUIDOS!A2:K1000:clear`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (concluidosRows.length > 0) {
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/SETUPS_CONCLUIDOS!A2?valueInputOption=USER_ENTERED`, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ values: concluidosRows })
-        });
-      }
-
-      // 2. Atualizar MAQUINAS_FILA
-      const maquinasRows = (store.maquinas || []).map((m) => [
-        m.id,
-        m.maquina,
-        m.peca,
-        m.setupExternoPronto ? 'SIM' : 'NÃO',
-        'AGUARDANDO INÍCIO'
-      ]);
-
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/MAQUINAS_FILA!A2:E200:clear`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (maquinasRows.length > 0) {
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/MAQUINAS_FILA!A2?valueInputOption=USER_ENTERED`, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ values: maquinasRows })
-        });
-      }
-
-      // 3. Atualizar SETUPS_ATIVOS
-      const ativosList = Object.values(store.setupsAtivos || {});
-      const ativosRows = ativosList.map((a) => {
-        const horaDh = new Date(a.updatedAt).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-        const historicoResumo = (a.historico || []).slice(-3).join(' | ');
-        return [
-          a.id,
-          a.maquina,
-          a.peca,
-          a.modeloAnterior || '-',
-          a.prep1Val || '-',
-          a.prep2Val || '-',
-          a.dataInicio,
-          `${Math.floor(a.tempoDecorridoMs / 60000)} min`,
-          a.paradaAtiva ? `PARADA: ${a.paradaAtual?.motivo || 'Em andamento'}` : 'EM PRODUÇÃO',
-          historicoResumo || '-',
-          horaDh
-        ];
-      });
-
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/SETUPS_ATIVOS!A2:K100:clear`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (ativosRows.length > 0) {
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/SETUPS_ATIVOS!A2?valueInputOption=USER_ENTERED`, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ values: ativosRows })
-        });
-      }
-
-      const horaNow = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-      this.lastSyncTime = horaNow;
-      this.lastError = null;
-      this.notifyStatus();
-
-      return {
-        sucesso: true,
-        mensagem: `Sincronizado automaticamente às ${horaNow}`
-      };
-    } catch (err: any) {
-      this.lastError = err.message || 'Erro ao sincronizar com Google Sheets';
-      this.notifyStatus();
-      throw err;
-    } finally {
-      this.isSyncing = false;
-      this.notifyStatus();
-
-      if (this.pendingSyncStore) {
-        const next = this.pendingSyncStore;
-        this.pendingSyncStore = null;
-        this.sincronizarTudoParaPlanilha(cleanId, token, next).catch((e) =>
-          console.warn('Erro na sincronização em fila Google Sheets:', e)
-        );
-      }
-    }
+    const res = await this.sincronizacaoBidirecional(spreadsheetId, token, store);
+    return { sucesso: res.sucesso, mensagem: res.mensagem };
   }
 
   /**
@@ -675,14 +548,10 @@ export class GoogleSheetsService {
         ];
       });
 
-      // Gravar abas na Planilha Google
+      // Gravar abas na Planilha Google de forma 100% ATÔMICA (SEM CLEAR PARA NUNCA PISCAR / OSCILAR NA TELA)
       const dataToBatch: any[] = [];
 
-      // SETUPS_CONCLUIDOS
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/SETUPS_CONCLUIDOS!A2:K1000:clear`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // 1. SETUPS_CONCLUIDOS
       if (concluidosRows.length > 0) {
         dataToBatch.push({
           range: `SETUPS_CONCLUIDOS!A2:K${concluidosRows.length + 1}`,
@@ -690,29 +559,37 @@ export class GoogleSheetsService {
         });
       }
 
-      // MAQUINAS_FILA (Salva 5 colunas: Máquina | Peça | Setup Externo | Status | Senha Liberação)
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/MAQUINAS_FILA!A2:E200:clear`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (maquinasRows.length > 0) {
-        dataToBatch.push({
-          range: `MAQUINAS_FILA!A2:E${maquinasRows.length + 1}`,
-          values: maquinasRows
-        });
+      // 2. MAQUINAS_FILA (Gravação atômica contínua: preenche com vazios as linhas antigas sem apagar a tela)
+      const maxRowsMaq = Math.max(maquinasRows.length, this.lastMaxRows.maquinas, 20);
+      this.lastMaxRows.maquinas = maxRowsMaq;
+      const paddedMaquinasRows: (string | number)[][] = [];
+      for (let i = 0; i < maxRowsMaq; i++) {
+        if (i < maquinasRows.length) {
+          paddedMaquinasRows.push(maquinasRows[i]);
+        } else {
+          paddedMaquinasRows.push(['', '', '', '', '']);
+        }
       }
+      dataToBatch.push({
+        range: `MAQUINAS_FILA!A2:E${1 + maxRowsMaq}`,
+        values: paddedMaquinasRows
+      });
 
-      // SETUPS_ATIVOS
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/SETUPS_ATIVOS!A2:K100:clear`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (ativosRows.length > 0) {
-        dataToBatch.push({
-          range: `SETUPS_ATIVOS!A2:K${ativosRows.length + 1}`,
-          values: ativosRows
-        });
+      // 3. SETUPS_ATIVOS (Gravação atômica contínua sem piscar)
+      const maxRowsAtivos = Math.max(ativosRows.length, this.lastMaxRows.ativos, 15);
+      this.lastMaxRows.ativos = maxRowsAtivos;
+      const paddedAtivosRows: (string | number)[][] = [];
+      for (let i = 0; i < maxRowsAtivos; i++) {
+        if (i < ativosRows.length) {
+          paddedAtivosRows.push(ativosRows[i]);
+        } else {
+          paddedAtivosRows.push(['', '', '', '', '', '', '', '', '', '', '']);
+        }
       }
+      dataToBatch.push({
+        range: `SETUPS_ATIVOS!A2:K${1 + maxRowsAtivos}`,
+        values: paddedAtivosRows
+      });
 
       if (dataToBatch.length > 0) {
         await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values:batchUpdate`, {
