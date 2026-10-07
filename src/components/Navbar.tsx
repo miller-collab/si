@@ -140,7 +140,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={aoSincronizarAgora}
           disabled={sincronizando}
           className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 text-[11px] text-slate-300 hover:text-white transition group active:scale-95"
-          title="Clique para sincronizar agora ou aguarde o ciclo automático a cada 40s"
+          title="Clique para sincronizar agora ou aguarde o ciclo automático a cada 30s"
         >
           <div className="flex items-center gap-2">
             <RefreshCw
@@ -149,7 +149,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             />
             <span className="font-semibold hidden md:inline">
-              {sincronizando ? 'Sincronizando...' : 'Auto-Sync (40s)'}
+              {sincronizando ? 'Sincronizando...' : 'Auto-Sync (30s)'}
             </span>
           </div>
           {segundosParaSync !== undefined && !sincronizando && (

@@ -80,29 +80,30 @@ export default function App() {
     setTurnoAtivo(dentro);
   }, []);
 
-  // 40-second auto-sync loop state (Foto 2)
-  const [segundosParaSync, setSegundosParaSync] = useState(40);
+  // 30-second auto-sync loop state (Foto 1)
+  const [segundosParaSync, setSegundosParaSync] = useState(30);
   const [sincronizando, setSincronizando] = useState(false);
   const ultimaAtividadeRef = useRef(Date.now());
   const sincronizandoRef = useRef(false);
   const autoSaveSheetsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch data & optionally sync automatically to Google Sheets
-  const carregarDados = useCallback(async (sincronizarComPlanilha = false) => {
+  const carregarDados = useCallback(async (sincronizarComPlanilha = false, forcarImediato = false) => {
     try {
       const data = await SetupApiService.fetchSync();
       setStoreData(data);
       checarTurno(data.turnoConfig);
       setOnline(true);
 
-      // Sincronização Bidirecional em tempo real com a Planilha Google (A Planilha é o Centro de Tudo)
+      // Sincronização Bidirecional com a Planilha Google (respeitando intervalo de 10 segundos)
       if (sincronizarComPlanilha && data.sheetConfig?.spreadsheetId) {
         getAccessToken().then((tok) => {
           if (tok) {
             GoogleSheetsService.sincronizacaoBidirecional(
               data.sheetConfig!.spreadsheetId,
               tok,
-              data
+              data,
+              forcarImediato
             )
               .then((res) => {
                 if (res?.storeAtualizado) {
@@ -124,14 +125,14 @@ export default function App() {
     }
   }, [checarTurno]);
 
-  const sincronizarAgora = useCallback(async () => {
+  const sincronizarAgora = useCallback(async (forcar = true) => {
     if (sincronizandoRef.current) return;
     sincronizandoRef.current = true;
     setSincronizando(true);
     try {
-      await carregarDados(true);
+      await carregarDados(true, forcar);
     } finally {
-      setSegundosParaSync(40);
+      setSegundosParaSync(30);
       sincronizandoRef.current = false;
       setSincronizando(false);
     }
@@ -169,14 +170,14 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisibilidadeChange);
     window.addEventListener('focus', onWindowFocus);
 
-    // 40-second auto-sync loop if nobody is interacting (Photo 2)
+    // 30-second auto-sync loop if nobody is interacting (Foto 1)
     const intervalOcioso = setInterval(() => {
       const segundosSemInteracao = Math.floor((Date.now() - ultimaAtividadeRef.current) / 1000);
-      const restantes = Math.max(0, 40 - (segundosSemInteracao % 40));
+      const restantes = Math.max(0, 30 - (segundosSemInteracao % 30));
       setSegundosParaSync(restantes);
 
-      // When reaching 40s idle loop or cycling every 40s idle
-      if (segundosSemInteracao > 0 && segundosSemInteracao % 40 === 0) {
+      // When reaching 30s idle loop or cycling every 30s idle
+      if (segundosSemInteracao > 0 && segundosSemInteracao % 30 === 0) {
         sincronizarAgora();
       }
     }, 1000);
@@ -236,14 +237,14 @@ export default function App() {
     try {
       await SetupApiService.autoSaveCard(id, prep1Val, prep2Val, checks1, checks2, checksPend, tempoDecorridoMs);
 
-      // Auto-gravação em segundo plano na planilha Google com debounce de 1 segundo
+      // Auto-gravação em segundo plano na planilha Google com debounce de 10 segundos para não sobrecarregar
       if (storeData.sheetConfig?.spreadsheetId) {
         if (autoSaveSheetsTimerRef.current) {
           clearTimeout(autoSaveSheetsTimerRef.current);
         }
         autoSaveSheetsTimerRef.current = setTimeout(async () => {
-          await carregarDados(true);
-        }, 1000);
+          await carregarDados(true, false);
+        }, 10000);
       }
     } catch (err) {
       console.error('Erro no auto-save:', err);
@@ -315,14 +316,19 @@ export default function App() {
   };
 
   const handleToggleSetupExterno = async (maquinaId: string, senha: string) => {
-    await SetupApiService.toggleSetupExterno(maquinaId, senha);
-    await carregarDados(true);
-    showToast('Status de Setup Externo atualizado e sincronizado!');
+    try {
+      await SetupApiService.toggleSetupExterno(maquinaId, senha);
+      await carregarDados(true, true);
+      showToast('Status de Setup Externo autorizado com senha 1152 e gravado na planilha!');
+    } catch (err: any) {
+      showToast(err.message || 'Senha incorreta!');
+      throw err;
+    }
   };
 
   const handleDeletarMaquina = async (maquinaId: string, senha: string) => {
     await SetupApiService.deletarMaquina(maquinaId, senha);
-    await carregarDados(true);
+    await carregarDados(true, true);
     showToast('Máquina removida da fila e da planilha!');
   };
 
@@ -364,7 +370,18 @@ export default function App() {
   const handleAdicionarMaquina = async (maquina: string, peca: string) => {
     try {
       await SetupApiService.adicionarMaquina(maquina, peca);
-      await carregarDados(true);
+      if (storeData.sheetConfig?.spreadsheetId) {
+        getAccessToken().then((tok) => {
+          if (tok) {
+            GoogleSheetsService.adicionarMaquinaNaPlanilha(
+              storeData.sheetConfig!.spreadsheetId,
+              tok,
+              { maquina, peca }
+            ).catch((e) => console.warn('Erro ao adicionar máquina na planilha:', e));
+          }
+        });
+      }
+      await carregarDados(true, true);
       showToast(`Máquina ${maquina} adicionada à fila e à Planilha Google!`);
     } catch (err) {
       console.error(err);

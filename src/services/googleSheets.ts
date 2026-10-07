@@ -20,6 +20,9 @@ export class GoogleSheetsService {
   private static listeners: Array<(status: SheetSyncStatus) => void> = [];
   private static lastSyncTime: string | null = null;
   private static lastError: string | null = null;
+  private static lastSyncTimestamp = 0;
+  private static readonly INTERVALO_MINIMO_MS = 10000; // Intervalo de 10 segundos para não sobrecarregar
+  private static debounceTimer: any = null;
   private static lastMaxRows = {
     maquinas: 25,
     ativos: 15,
@@ -312,8 +315,45 @@ export class GoogleSheetsService {
     token: string,
     store: StoreData
   ): Promise<{ sucesso: boolean; mensagem: string }> {
-    const res = await this.sincronizacaoBidirecional(spreadsheetId, token, store);
+    const res = await this.sincronizacaoBidirecional(spreadsheetId, token, store, true);
     return { sucesso: res.sucesso, mensagem: res.mensagem };
+  }
+
+  /**
+   * Adiciona uma máquina diretamente na aba MAQUINAS_FILA da planilha Google
+   */
+  public static async adicionarMaquinaNaPlanilha(
+    spreadsheetId: string,
+    token: string,
+    maquina: { id?: string; maquina: string; peca: string; setupExternoPronto?: boolean }
+  ): Promise<boolean> {
+    const cleanId = this.extrairSpreadsheetId(spreadsheetId);
+    if (!cleanId) return false;
+
+    const row = [
+      maquina.id || '1',
+      maquina.maquina.toUpperCase(),
+      maquina.peca.toUpperCase(),
+      maquina.setupExternoPronto ? 'SIM' : 'NÃO',
+      maquina.setupExternoPronto ? 'LIBERADO PARA SETUP' : 'AGUARDANDO INÍCIO',
+      maquina.setupExternoPronto ? '1152' : ''
+    ];
+
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/MAQUINAS_FILA!A:F:append?valueInputOption=USER_ENTERED`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          values: [row]
+        })
+      }
+    );
+
+    return res.ok;
   }
 
   /**
@@ -352,9 +392,12 @@ export class GoogleSheetsService {
           idStr
         ] = r;
 
-        const id = idStr || `sheet_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const id =
+          idStr && String(idStr).trim() !== '' && String(idStr).trim() !== '-'
+            ? String(idStr).trim()
+            : `conc_${String(maquina || '').trim()}_${String(peca || '').trim()}_${tempoMsStr || '0'}`;
         const tempoMs = Number(tempoMsStr) || 0;
-        const pendenciasConcluidas = String(pendenciasStr).toUpperCase() === 'SIM';
+        const pendenciasConcluidas = String(pendenciasStr || '').toUpperCase().trim() === 'SIM';
 
         concluidos.push({
           id,
@@ -394,24 +437,23 @@ export class GoogleSheetsService {
         const colB = String(r[1] || '').trim();
         const colC = String(r[2] || '').trim();
 
-        // Se a coluna B for o código da máquina (padrão com Col A = ID):
-        if (
-          colB &&
-          colB.toUpperCase() !== 'MÁQUINA' &&
-          colB.toUpperCase() !== 'MAQUINA' &&
-          colB.toUpperCase() !== 'PEÇA' &&
-          colB.toUpperCase() !== 'PECA'
-        ) {
-          rowId = colA || `sheet_maq_${idx}_${colB}`;
+        // Identifica se a coluna A é ID do sistema ou se já é o nome da máquina
+        const colAEhId =
+          /^\d+$/.test(colA) ||
+          colA.toLowerCase().startsWith('sheet_') ||
+          colA.toLowerCase().startsWith('id_') ||
+          colA.toLowerCase().startsWith('maq_');
+
+        if (colAEhId && colB) {
+          rowId = colA;
           maqName = colB;
           pecaName = colC;
         } else if (
           colA &&
+          colA.toUpperCase() !== 'ID' &&
           colA.toUpperCase() !== 'MÁQUINA' &&
-          colA.toUpperCase() !== 'MAQUINA' &&
-          colA.toUpperCase() !== 'ID'
+          colA.toUpperCase() !== 'MAQUINA'
         ) {
-          // Caso a coluna A contenha o nome da máquina diretamente
           rowId = `sheet_maq_${idx}_${colA}`;
           maqName = colA;
           pecaName = colB;
@@ -419,12 +461,16 @@ export class GoogleSheetsService {
 
         // LÓGICA CIRÚRGICA DE SENHA E STATUS DE SETUP EXTERNO:
         // Se a coluna "Senha Liberação (1152)" ou qualquer célula contiver a senha '1152'
-        // OU contiver 'SIM', 'LIBERADO', 'OK', 'PRONTO':
+        // OU contiver 'SIM', 'LIBERADO', 'OK', 'PRONTO', 'ATIVADO':
         // -> A luz do Setup Externo fica ATIVADA no app!
         const temSenha1152 = r.some((c) => String(c || '').trim() === '1152');
         const temSim = r.some((c) => {
           const v = String(c || '').trim().toUpperCase();
-          return v === 'SIM' || v === 'LIBERADO' || v === 'OK' || v === 'PRONTO';
+          return v === 'SIM' || v === 'LIBERADO' || v === 'OK' || v === 'PRONTO' || v === 'ATIVADO';
+        });
+        const temNao = !temSenha1152 && r.some((c) => {
+          const v = String(c || '').trim().toUpperCase();
+          return v === 'NÃO' || v === 'NAO';
         });
 
         const extPronto = temSenha1152 || temSim;
@@ -441,8 +487,9 @@ export class GoogleSheetsService {
             id: rowId,
             maquina: maqUpper,
             peca: (pecaName || 'PRODUÇÃO').toUpperCase(),
-            setupExternoPronto: extPronto
-          });
+            setupExternoPronto: extPronto,
+            desativadoExplicitamenteNaPlanilha: temNao && !extPronto
+          } as any);
         }
       });
     }
@@ -457,14 +504,41 @@ export class GoogleSheetsService {
   public static async sincronizacaoBidirecional(
     spreadsheetId: string,
     token: string,
-    store: StoreData
+    store: StoreData,
+    forcarImediato: boolean = false
   ): Promise<{ sucesso: boolean; mensagem: string; storeAtualizado: StoreData }> {
     const cleanId = this.extrairSpreadsheetId(spreadsheetId);
     if (!cleanId) throw new Error('ID da Planilha não configurado.');
 
     if (this.isSyncing) {
-      this.pendingSyncStore = store;
-      return { sucesso: true, mensagem: 'Sincronização em andamento, agendada.', storeAtualizado: store };
+      return { sucesso: true, mensagem: 'Sincronização em andamento.', storeAtualizado: store };
+    }
+
+    // Regra dos 10 segundos para não salvar a todo instante nem sobrecarregar a planilha
+    const agora = Date.now();
+    const tempoDesdeUltimaSync = agora - this.lastSyncTimestamp;
+    if (!forcarImediato && tempoDesdeUltimaSync < this.INTERVALO_MINIMO_MS) {
+      const tempoRestante = this.INTERVALO_MINIMO_MS - tempoDesdeUltimaSync;
+      if (this.debounceTimer) clearTimeout(this.debounceTimer);
+      this.debounceTimer = setTimeout(() => {
+        this.debounceTimer = null;
+        SetupApiService.fetchSync().then((latest) => {
+          this.sincronizacaoBidirecional(cleanId, token, latest, true).catch((e) =>
+            console.warn('Erro na sincronização agendada:', e)
+          );
+        });
+      }, tempoRestante);
+
+      return {
+        sucesso: true,
+        mensagem: `Próximo salvamento em ${Math.ceil(tempoRestante / 1000)}s`,
+        storeAtualizado: store
+      };
+    }
+
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
     }
 
     this.isSyncing = true;
@@ -476,44 +550,58 @@ export class GoogleSheetsService {
         this.abasValidadasIds.add(cleanId);
       }
 
-      // 1. Ler da Planilha Google (Fonte da Verdade)
+      // 1. Ler da Planilha Google (A PLANILHA É A FONTE DA VERDADE SOBERANA)
       const dadosPlanilha = await this.puxarDadosDaPlanilha(cleanId, token);
 
-      // Preservar autorizações locais feitas com senha no app para não haver flicker/piscar
-      const statusExternoLocal = new Map<string, boolean>();
-      (store.maquinas || []).forEach((m) => {
-        if (m.setupExternoPronto) {
-          statusExternoLocal.set(m.maquina.toUpperCase(), true);
-          statusExternoLocal.set(`${m.maquina}_${m.peca}`.toUpperCase(), true);
-        }
+      // A Planilha manda em tudo: Se o usuário apagou ou alterou linhas na planilha, o app acata 100%!
+      // Não ressuscita linhas apagadas pelo usuário na planilha.
+      // Desduplica por nome de máquina (cada torno/centro físico só pode aparecer uma única vez na fila).
+      const localMaqMap = new Map<string, Maquina>();
+      (store.maquinas || []).forEach((lm) => {
+        localMaqMap.set(lm.maquina.toUpperCase(), lm);
       });
 
-      // Se a planilha tem a senha 1152/SIM OU o app acabou de autorizar, a luz fica ATIVADA
-      const maquinasSheetNomes = new Set(dadosPlanilha.maquinas.map((m) => `${m.maquina}_${m.peca}`.toUpperCase()));
-      let listaMaquinasFinal = dadosPlanilha.maquinas.map((mSheet) => {
-        const autorizadoNoApp =
-          statusExternoLocal.get(mSheet.maquina.toUpperCase()) ||
-          statusExternoLocal.get(`${mSheet.maquina}_${mSheet.peca}`.toUpperCase()) ||
-          false;
-        return {
-          ...mSheet,
-          setupExternoPronto: mSheet.setupExternoPronto || autorizadoNoApp
-        };
-      });
+      const listaMaquinasFinal: Maquina[] = [];
+      const vistos = new Set<string>();
+      (dadosPlanilha.maquinas || []).forEach((m: any) => {
+        const chave = m.maquina.toUpperCase();
+        if (!vistos.has(chave)) {
+          vistos.add(chave);
 
-      // PRESERVA TODAS as máquinas cadastradas no app que ainda não estavam na planilha!
-      (store.maquinas || []).forEach((mLocal) => {
-        const chave = `${mLocal.maquina}_${mLocal.peca}`.toUpperCase();
-        if (!maquinasSheetNomes.has(chave)) {
+          const mLocal = localMaqMap.get(chave);
+          const desativadoPelaPlanilha = Boolean(m.desativadoExplicitamenteNaPlanilha);
+
+          // Se o usuário digitou explicitamente NÃO e tirou a senha na planilha, desativa.
+          // Caso contrário, se a planilha contém 1152 ou SIM OU se o app local já autorizou com 1152:
+          // A luz do setup externo FICA ATIVADA! Impede que apareça e apague em instantes.
+          let extAtivado = false;
+          if (desativadoPelaPlanilha) {
+            extAtivado = false;
+          } else {
+            extAtivado = m.setupExternoPronto || Boolean(mLocal?.setupExternoPronto);
+          }
+
           listaMaquinasFinal.push({
-            ...mLocal,
-            setupExternoPronto: Boolean(mLocal.setupExternoPronto)
+            id: m.id,
+            maquina: m.maquina,
+            peca: m.peca,
+            setupExternoPronto: extAtivado
           });
-          maquinasSheetNomes.add(chave);
         }
       });
 
-      // 2. Mesclar no backend da aplicação
+      // Se a planilha estiver vazia, preenche com as máquinas da memória
+      if (dadosPlanilha.maquinas.length === 0 && (store.maquinas || []).length > 0) {
+        (store.maquinas || []).forEach((mLocal) => {
+          const chave = mLocal.maquina.toUpperCase();
+          if (!vistos.has(chave)) {
+            vistos.add(chave);
+            listaMaquinasFinal.push(mLocal);
+          }
+        });
+      }
+
+      // 2. Mesclar no backend da aplicação adotando a planilha soberana
       await SetupApiService.mesclarPlanilha(dadosPlanilha.concluidos, listaMaquinasFinal, true);
       const storeAtualizado = await SetupApiService.fetchSync();
 
@@ -620,6 +708,7 @@ export class GoogleSheetsService {
         });
       }
 
+      this.lastSyncTimestamp = Date.now();
       const horaNow = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
       this.lastSyncTime = horaNow;
       this.lastError = null;
@@ -627,7 +716,7 @@ export class GoogleSheetsService {
 
       return {
         sucesso: true,
-        mensagem: `Sincronização bidirecional realizada com sucesso às ${horaNow}.`,
+        mensagem: `Sincronização realizada com sucesso às ${horaNow}.`,
         storeAtualizado
       };
     } catch (err: any) {
@@ -637,15 +726,6 @@ export class GoogleSheetsService {
     } finally {
       this.isSyncing = false;
       this.notifyStatus();
-
-      if (this.pendingSyncStore) {
-        this.pendingSyncStore = null;
-        SetupApiService.fetchSync().then((latestStore) => {
-          this.sincronizacaoBidirecional(cleanId, token, latestStore).catch((e) =>
-            console.warn('Erro na sincronização pendente:', e)
-          );
-        });
-      }
     }
   }
 }

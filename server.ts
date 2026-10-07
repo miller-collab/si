@@ -408,7 +408,9 @@ class StoreManager {
   }
 
   public toggleSetupExterno(maquinaId: string): boolean {
-    const m = this.data.maquinas.find(item => String(item.id) === String(maquinaId));
+    const m = this.data.maquinas.find(
+      item => String(item.id) === String(maquinaId) || item.maquina.toUpperCase() === String(maquinaId).toUpperCase()
+    );
     if (!m) return false;
     m.setupExternoPronto = !m.setupExternoPronto;
     this.save();
@@ -422,7 +424,9 @@ class StoreManager {
   }
 
   public deletarMaquina(maquinaId: string): boolean {
-    this.data.maquinas = this.data.maquinas.filter(item => String(item.id) !== String(maquinaId));
+    this.data.maquinas = this.data.maquinas.filter(
+      item => String(item.id) !== String(maquinaId) && item.maquina.toUpperCase() !== String(maquinaId).toUpperCase()
+    );
     this.save();
     return true;
   }
@@ -507,38 +511,42 @@ class StoreManager {
     substituirMaquinas: boolean = false
   ) {
     if (Array.isArray(novosConcluidos) && novosConcluidos.length > 0) {
-      const existingIds = new Set(this.data.concluidos.map((c) => c.id));
       for (const item of novosConcluidos) {
-        if (!existingIds.has(item.id)) {
+        // Encontra registro existente por ID ou por máquina + peça + tempo
+        const existente = this.data.concluidos.find(
+          (c) =>
+            (c.id && item.id && c.id === item.id) ||
+            (c.maquina.toUpperCase() === item.maquina.toUpperCase() &&
+              c.peca.toUpperCase() === item.peca.toUpperCase() &&
+              Math.abs((c.tempoMs || 0) - (item.tempoMs || 0)) < 3000)
+        );
+
+        if (existente) {
+          // Se a planilha marcou SIM ou o app marcou SIM, consolida definitivamente como SIM! Nunca volta para NÃO!
+          if (item.pendenciasConcluidas || existente.pendenciasConcluidas) {
+            existente.pendenciasConcluidas = true;
+          }
+          if (item.id && (!existente.id || existente.id.startsWith('sheet_'))) {
+            existente.id = item.id;
+          }
+        } else {
           this.data.concluidos.unshift(item);
-          existingIds.add(item.id);
         }
       }
     }
     if (Array.isArray(novasMaquinas)) {
       if (substituirMaquinas) {
-        // 1. Mapeia máquinas vindas da planilha preservando liberação do setup externo
-        const nomesPlanilha = new Set(novasMaquinas.map((m) => m.maquina.toUpperCase()));
-        const maquinasConsolidadas: Maquina[] = novasMaquinas.map((mNova) => {
+        // A PLANILHA MANDA EM TUDO: Se o usuário apagou ou alterou linhas na planilha, o app acata 100% diretamente
+        // CIRÚRGICO: Preserva status de setup externo ativo liberado com senha 1152 caso a máquina local já estivesse liberada
+        this.data.maquinas = novasMaquinas.map((mNova) => {
           const mLocal = this.data.maquinas.find(
-            (m) => m.maquina.toUpperCase() === mNova.maquina.toUpperCase()
+            (ml) => ml.maquina.toUpperCase() === mNova.maquina.toUpperCase()
           );
-          return {
-            ...mNova,
-            setupExternoPronto: mNova.setupExternoPronto || (mLocal ? mLocal.setupExternoPronto : false)
-          };
-        });
-
-        // 2. PRESERVA qualquer máquina adicionada no app que ainda não estava na planilha!
-        // NUNCA descarta uma máquina em fila cadastrada no app!
-        this.data.maquinas.forEach((mLocal) => {
-          if (!nomesPlanilha.has(mLocal.maquina.toUpperCase())) {
-            maquinasConsolidadas.push(mLocal);
-            nomesPlanilha.add(mLocal.maquina.toUpperCase());
+          if (mLocal?.setupExternoPronto && !mNova.setupExternoPronto) {
+            return { ...mNova, setupExternoPronto: true };
           }
+          return mNova;
         });
-
-        this.data.maquinas = maquinasConsolidadas;
       } else if (novasMaquinas.length > 0) {
         const existingIds = new Set(this.data.maquinas.map((m) => String(m.id)));
         for (const m of novasMaquinas) {
