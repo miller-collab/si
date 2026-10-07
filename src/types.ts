@@ -65,6 +65,15 @@ export interface SetupConcluido {
   segundosCalculados?: number;
 }
 
+export interface GoogleSheetConfig {
+  spreadsheetId: string;
+  spreadsheetUrl: string;
+  spreadsheetTitle?: string;
+  autoSyncAtivo: boolean;
+  ultimaSync?: string;
+  sincronizadoPor?: string;
+}
+
 export interface StoreData {
   maquinas: Maquina[];
   preparadores: string[];
@@ -75,5 +84,5 @@ export interface StoreData {
   setupsAtivos: Record<string, SetupAtivo>;
   concluidos: SetupConcluido[];
   serverTime?: number;
-  updatedAt?: number;
+  sheetConfig?: GoogleSheetConfig;
 }

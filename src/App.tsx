@@ -12,6 +12,8 @@ import type {
   TurnoConfig
 } from './types';
 import { SetupApiService } from './services/api';
+import { getAccessToken } from './services/googleAuth';
+import { GoogleSheetsService } from './services/googleSheets';
 import { estaNoTurno, formatarTempo } from './utils/turno';
 import { baixarRelatorioDashboardPdf, baixarRelatorioGestorPdf } from './utils/pdfGestor';
 
@@ -83,17 +85,34 @@ export default function App() {
   const [sincronizando, setSincronizando] = useState(false);
   const ultimaAtividadeRef = useRef(Date.now());
   const sincronizandoRef = useRef(false);
+  const autoSaveSheetsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch initial data & subscribe
-  const carregarDados = useCallback(async () => {
+  // Fetch data & optionally sync automatically to Google Sheets
+  const carregarDados = useCallback(async (sincronizarComPlanilha = false) => {
     try {
       const data = await SetupApiService.fetchSync();
       setStoreData(data);
       checarTurno(data.turnoConfig);
       setOnline(true);
+
+      // Auto-gravação em tempo real na Planilha Google
+      if (sincronizarComPlanilha && data.sheetConfig?.spreadsheetId) {
+        getAccessToken().then((tok) => {
+          if (tok) {
+            GoogleSheetsService.sincronizarTudoParaPlanilha(
+              data.sheetConfig!.spreadsheetId,
+              tok,
+              data
+            ).catch((e) => console.warn('Erro na sincronização automática Google Sheets:', e));
+          }
+        });
+      }
+
+      return data;
     } catch (err) {
       console.warn('Erro ao sincronizar com backend:', err);
       setOnline(false);
+      return null;
     } finally {
       setCarregando(false);
     }
@@ -104,7 +123,7 @@ export default function App() {
     sincronizandoRef.current = true;
     setSincronizando(true);
     try {
-      await carregarDados();
+      await carregarDados(true);
     } finally {
       setSegundosParaSync(40);
       sincronizandoRef.current = false;
@@ -115,16 +134,8 @@ export default function App() {
   useEffect(() => {
     carregarDados();
 
-    // Direct Real-Time Cloud Firestore Listener (Live updates across all devices in real-time)
-    const unsubscribeFirestore = SetupApiService.listenRealtime((data) => {
-      setStoreData(data);
-      checarTurno(data.turnoConfig);
-      setOnline(true);
-      setCarregando(false);
-    });
-
     // Listen to local cache updates
-    const unsubscribeCache = SetupApiService.subscribe((data) => {
+    const unsubscribe = SetupApiService.subscribe((data) => {
       setStoreData(data);
       checarTurno(data.turnoConfig);
     });
@@ -164,7 +175,7 @@ export default function App() {
       }
     }, 1000);
 
-    // Background poll every 15 seconds to ensure sync resilience
+    // Light background poll every 4 seconds to sync between multiple tablets
     const syncInterval = setInterval(() => {
       SetupApiService.fetchSync()
         .then((data) => {
@@ -172,7 +183,7 @@ export default function App() {
           setOnline(true);
         })
         .catch(() => setOnline(false));
-    }, 15000);
+    }, 4000);
 
     // Turno clock check every 15 seconds
     const turnoInterval = setInterval(() => {
@@ -180,8 +191,7 @@ export default function App() {
     }, 15000);
 
     return () => {
-      unsubscribeFirestore();
-      unsubscribeCache();
+      unsubscribe();
       window.removeEventListener('pointerdown', resetAtividade);
       window.removeEventListener('touchstart', resetAtividade);
       window.removeEventListener('keydown', resetAtividade);
@@ -199,9 +209,9 @@ export default function App() {
     setMaquinaParaIniciar(null);
     try {
       await SetupApiService.iniciarSetup(maquina.id, maquina.maquina, maquina.peca, modeloAnterior);
-      await carregarDados();
+      await carregarDados(true);
       setAbaAtiva('ativos');
-      showToast(`Setup iniciado para a máquina ${maquina.maquina}!`);
+      showToast(`Setup iniciado para a máquina ${maquina.maquina}! Gravado na planilha.`);
     } catch (err) {
       console.error(err);
       showToast('Erro ao iniciar setup.');
@@ -219,6 +229,16 @@ export default function App() {
   ) => {
     try {
       await SetupApiService.autoSaveCard(id, prep1Val, prep2Val, checks1, checks2, checksPend, tempoDecorridoMs);
+
+      // Auto-gravação em segundo plano na planilha Google com debounce de 1 segundo
+      if (storeData.sheetConfig?.spreadsheetId) {
+        if (autoSaveSheetsTimerRef.current) {
+          clearTimeout(autoSaveSheetsTimerRef.current);
+        }
+        autoSaveSheetsTimerRef.current = setTimeout(async () => {
+          await carregarDados(true);
+        }, 1000);
+      }
     } catch (err) {
       console.error('Erro no auto-save:', err);
     }
@@ -227,7 +247,7 @@ export default function App() {
   const handleDesconto = async (id: string, tipo: 'cafe' | 'almoco') => {
     try {
       await SetupApiService.aplicarDesconto(id, tipo);
-      await carregarDados();
+      await carregarDados(true);
       showToast(tipo === 'cafe' ? 'Intervalo de café descontado (-15m)' : 'Intervalo de almoço descontado (-1.5h)');
     } catch (err) {
       console.error(err);
@@ -238,8 +258,8 @@ export default function App() {
   const handleIniciarParada = async (id: string, motivo: string) => {
     try {
       await SetupApiService.iniciarParada(id, motivo);
-      await carregarDados();
-      showToast('Parada iniciada! Relógio em andamento.');
+      await carregarDados(true);
+      showToast('Parada iniciada! Relógio em andamento gravado na planilha.');
     } catch (err) {
       console.error(err);
       showToast('Erro ao iniciar parada.');
@@ -249,8 +269,8 @@ export default function App() {
   const handleFinalizarParada = async (id: string, motivo: string) => {
     try {
       await SetupApiService.finalizarParada(id, motivo);
-      await carregarDados();
-      showToast('Motivo da parada gravado! Setup retomado.');
+      await carregarDados(true);
+      showToast('Motivo da parada gravado! Setup retomado e sincronizado na planilha.');
     } catch (err) {
       console.error(err);
       showToast('Erro ao finalizar parada.');
@@ -266,8 +286,8 @@ export default function App() {
   ) => {
     try {
       await SetupApiService.liberarMaquina(id, prep1, prep2, tempoFormatado, tempoMs);
-      await carregarDados();
-      showToast(`Máquina liberada para produção! Tempo oficial registrado: ${tempoFormatado}.`);
+      await carregarDados(true);
+      showToast(`Máquina liberada para produção! Tempo registrado na Planilha Google: ${tempoFormatado}.`);
     } catch (err) {
       console.error(err);
       showToast('Erro ao liberar máquina.');
@@ -277,8 +297,8 @@ export default function App() {
   const handleEncerrarPendencias = async (id: string) => {
     try {
       await SetupApiService.encerrarPendencias(id);
-      await carregarDados();
-      showToast('Todas as pendências foram concluídas. Setup arquivado com sucesso!');
+      await carregarDados(true);
+      showToast('Todas as pendências foram concluídas. Setup arquivado e sincronizado!');
       if (Object.keys(storeData.setupsAtivos).length <= 1) {
         setAbaAtiva('concluidos');
       }
@@ -290,58 +310,44 @@ export default function App() {
 
   const handleToggleSetupExterno = async (maquinaId: string, senha: string) => {
     await SetupApiService.toggleSetupExterno(maquinaId, senha);
-    await carregarDados();
-    showToast('Status de Setup Externo atualizado com sucesso!');
+    await carregarDados(true);
+    showToast('Status de Setup Externo atualizado e sincronizado!');
   };
 
   const handleDeletarMaquina = async (maquinaId: string, senha: string) => {
-    setStoreData(prev => ({
-      ...prev,
-      maquinas: prev.maquinas.filter(m => m.id !== maquinaId)
-    }));
     await SetupApiService.deletarMaquina(maquinaId, senha);
-    showToast('Máquina removida da fila!');
+    await carregarDados(true);
+    showToast('Máquina removida da fila e da planilha!');
   };
 
   const handleLimparMaquinas = async (senha: string) => {
-    setStoreData(prev => ({ ...prev, maquinas: [] }));
     await SetupApiService.limparMaquinas(senha);
+    await carregarDados(true);
     showToast('Fila de máquinas limpa com sucesso!');
   };
 
   const handleDeletarPreparador = async (nome: string, senha: string) => {
-    setStoreData(prev => ({
-      ...prev,
-      preparadores: prev.preparadores.filter(p => p !== nome)
-    }));
     await SetupApiService.deletarPreparador(nome, senha);
+    await carregarDados(true);
     showToast(`Preparador ${nome} removido!`);
   };
 
   const handleSalvarTurno = async (config: TurnoConfig, senha: string) => {
-    setStoreData(prev => ({ ...prev, turnoConfig: config }));
     await SetupApiService.salvarTurno(config, senha);
-    showToast('Horários de turno atualizados!');
+    await carregarDados(true);
+    showToast('Horários de turno atualizados e sincronizados!');
   };
 
   const handleSalvarTarefas = async (grupo: 'parte1' | 'parte2' | 'pendencias', tarefas: string[], senha: string) => {
-    setStoreData(prev => {
-      if (grupo === 'parte1') return { ...prev, tarefas1: tarefas };
-      if (grupo === 'parte2') return { ...prev, tarefas2: tarefas };
-      return { ...prev, tarefasPendencias: tarefas };
-    });
     await SetupApiService.salvarTarefas(grupo, tarefas, senha);
+    await carregarDados(true);
     showToast('Atividades do checklist salvas!');
   };
 
   const handleAdicionarPreparador = async (nome: string) => {
     try {
-      const clean = nome.trim().toUpperCase();
-      setStoreData(prev => ({
-        ...prev,
-        preparadores: prev.preparadores.includes(clean) ? prev.preparadores : [...prev.preparadores, clean]
-      }));
       await SetupApiService.adicionarPreparador(nome);
+      await carregarDados(true);
       showToast(`Preparador ${nome} adicionado com sucesso!`);
     } catch (err) {
       console.error(err);
@@ -351,10 +357,9 @@ export default function App() {
 
   const handleAdicionarMaquina = async (maquina: string, peca: string) => {
     try {
-      const nova = { id: String(Date.now()), maquina: maquina.trim().toUpperCase(), peca: peca.trim().toUpperCase(), setupExternoPronto: false };
-      setStoreData(prev => ({ ...prev, maquinas: [...prev.maquinas, nova] }));
       await SetupApiService.adicionarMaquina(maquina, peca);
-      showToast(`Máquina ${maquina} adicionada à fila!`);
+      await carregarDados(true);
+      showToast(`Máquina ${maquina} adicionada à fila e à Planilha Google!`);
     } catch (err) {
       console.error(err);
       showToast('Erro ao adicionar máquina.');
@@ -363,30 +368,29 @@ export default function App() {
 
   const handleResetDemo = async () => {
     await SetupApiService.resetDemo();
-    await carregarDados();
+    await carregarDados(true);
     showToast('Checklists padrão restaurados com sucesso!');
   };
 
   const handleEsvaziarConcluidos = async () => {
-    // Instant UI zeroing so the user never sees delay or error
-    setStoreData(prev => ({ ...prev, concluidos: [] }));
     try {
       await SetupApiService.esvaziarConcluidos('8619');
+      await carregarDados(true);
       showToast('Histórico de registros esvaziado com sucesso! Começando do zero.');
     } catch (err) {
       console.error(err);
-      showToast('Histórico esvaziado com sucesso!');
+      showToast('Erro ao esvaziar registros.');
     }
   };
 
   const handleCarregarDados = async (backup: any) => {
     try {
       await SetupApiService.carregarDados(backup, '8619');
-      await carregarDados();
+      await carregarDados(true);
       showToast('Dados e histórico carregados com sucesso!');
     } catch (err: any) {
       console.error(err);
-      showToast(err.message || 'Erro ao carregar dados.');
+      showToast(err?.message || 'Falha ao restaurar dados.');
     }
   };
 
@@ -529,6 +533,7 @@ export default function App() {
         segundosParaSync={segundosParaSync}
         sincronizando={sincronizando}
         aoSincronizarAgora={sincronizarAgora}
+        sheetConfig={storeData.sheetConfig}
       />
 
       {/* Main Content Area */}
@@ -589,6 +594,9 @@ export default function App() {
             tarefas1={storeData.tarefas1 || []}
             tarefas2={storeData.tarefas2 || []}
             tarefasPendencias={storeData.tarefasPendencias || []}
+            storeData={storeData}
+            aoAtualizarStore={async () => { await carregarDados(); }}
+            onShowToast={showToast}
             aoSalvarTurno={handleSalvarTurno}
             aoAdicionarPreparador={handleAdicionarPreparador}
             aoDeletarPreparador={handleDeletarPreparador}

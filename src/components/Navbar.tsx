@@ -8,8 +8,10 @@ import {
   Cog,
   Wifi,
   CalendarClock,
-  RefreshCw
+  RefreshCw,
+  FileSpreadsheet
 } from 'lucide-react';
+import type { GoogleSheetConfig } from '../types';
 
 interface NavbarProps {
   abaAtiva: 'dashboard' | 'ativos' | 'concluidos' | 'gestor' | 'admin';
@@ -21,6 +23,7 @@ interface NavbarProps {
   segundosParaSync?: number;
   sincronizando?: boolean;
   aoSincronizarAgora?: () => void;
+  sheetConfig?: GoogleSheetConfig;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -32,7 +35,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   shiftScheduleStr,
   segundosParaSync,
   sincronizando,
-  aoSincronizarAgora
+  aoSincronizarAgora,
+  sheetConfig
 }) => {
   return (
     <nav className="w-20 md:w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between py-5 shadow-2xl z-30 select-none">
@@ -145,14 +149,48 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             />
             <span className="font-semibold hidden md:inline">
-              {sincronizando ? 'Sincronizando...' : 'Sync Tempo Real'}
+              {sincronizando ? 'Sincronizando...' : 'Auto-Sync (40s)'}
             </span>
           </div>
-          <span className="font-mono text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30 hidden md:inline flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            LIVE
-          </span>
+          {segundosParaSync !== undefined && !sincronizando && (
+            <span className="font-mono text-[10px] text-blue-400 font-bold bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 hidden md:inline">
+              {segundosParaSync}s
+            </span>
+          )}
         </button>
+
+        {/* Google Sheets Sync Indicator */}
+        {sheetConfig?.spreadsheetId ? (
+          <button
+            type="button"
+            onClick={() => aoMudarAba('admin')}
+            className="w-full flex items-center justify-between p-2 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-[11px] text-emerald-300 hover:bg-emerald-900/40 transition group"
+            title={`Planilha Google vinculada: ${sheetConfig.spreadsheetTitle || sheetConfig.spreadsheetId}. Clique para gerenciar.`}
+          >
+            <div className="flex items-center gap-2 truncate">
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="font-semibold truncate hidden md:inline">
+                {sheetConfig.spreadsheetTitle || 'Planilha Google'}
+              </span>
+            </div>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0 hidden md:inline" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => aoMudarAba('admin')}
+            className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400 hover:text-emerald-400 hover:border-emerald-500/40 transition"
+            title="Vincular Planilha Google para gravação em tempo real"
+          >
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span className="hidden md:inline font-medium">Planilha Google</span>
+            </div>
+            <span className="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 hidden md:inline">
+              Vincular
+            </span>
+          </button>
+        )}
 
         {/* Shift indicator */}
         <div className="hidden md:flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px]">
@@ -173,7 +211,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="hidden md:flex items-center justify-between px-2.5 py-1.5 text-[10px] text-slate-500">
           <span className="flex items-center gap-1.5">
             <Wifi className={`w-3 h-3 ${online ? 'text-emerald-400' : 'text-amber-400'}`} />
-            {online ? 'Nuvem Centralizada' : 'Modo Offline'}
+            {online ? 'API Centralizada' : 'Modo Offline'}
           </span>
           <span className="truncate max-w-[80px]" title={shiftScheduleStr}>
             {shiftScheduleStr}

@@ -42,7 +42,7 @@ export function extrairDetalhesCompletosSetup(gargalo: SetupConcluido): {
   // 2. Deduce start timestamp if missing
   if (!inicioSetupStr && gargalo.timestamp && gargalo.tempoMs) {
     const d = new Date(gargalo.timestamp - gargalo.tempoMs);
-    inicioSetupStr = `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    inicioSetupStr = `${d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} ${d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`;
   }
 
   const linhasEventos: string[] = [];
@@ -53,8 +53,8 @@ export function extrairDetalhesCompletosSetup(gargalo: SetupConcluido): {
   // Structured events from gargalo.eventos if available
   if (gargalo.eventos && Array.isArray(gargalo.eventos) && gargalo.eventos.length > 0) {
     gargalo.eventos.forEach((ev) => {
-      const hIni = ev.inicioMs ? new Date(ev.inicioMs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
-      const hFim = ev.fimMs ? new Date(ev.fimMs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const hIni = ev.inicioMs ? new Date(ev.inicioMs).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }) : '';
+      const hFim = ev.fimMs ? new Date(ev.fimMs).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }) : '';
       const dur = ev.duracaoMs ? Math.floor(ev.duracaoMs / 60000) + ' min' : '';
 
       if (ev.tipo === 'cafe') {
@@ -173,7 +173,7 @@ export function criarDocRelatorioGestor(dados: DadosRelatorioGestor): jsPDF {
 
   // Metadata Bar
   const agora = new Date();
-  const dataEmissaoStr = `${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  const dataEmissaoStr = `${agora.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`;
 
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.4);
@@ -535,7 +535,7 @@ export function baixarRelatorioDashboardPdf(dados: DadosRelatorioDashboard): voi
   doc.text('Histórico Geral de Produção, Tempos de Setup e Paradas de Máquina', margin, 24);
 
   const agora = new Date();
-  const dataEmissaoStr = `${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  const dataEmissaoStr = `${agora.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`;
 
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.4);

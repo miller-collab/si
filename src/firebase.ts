@@ -4,8 +4,9 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+const dbId = (firebaseConfig as any).firestoreDatabaseId;
+export const db = dbId && dbId !== '(default)'
+  ? getFirestore(app, dbId)
   : getFirestore(app);
 
 // Connection test on boot

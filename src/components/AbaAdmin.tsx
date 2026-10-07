@@ -13,7 +13,8 @@ import {
   ListTodo,
   Sparkles
 } from 'lucide-react';
-import type { TurnoConfig, Maquina } from '../types';
+import type { TurnoConfig, Maquina, StoreData } from '../types';
+import { PainelGoogleSheets } from './PainelGoogleSheets';
 
 interface AbaAdminProps {
   turnoConfig: TurnoConfig;
@@ -22,6 +23,9 @@ interface AbaAdminProps {
   tarefas1: string[];
   tarefas2: string[];
   tarefasPendencias: string[];
+  storeData: StoreData;
+  aoAtualizarStore: () => Promise<void>;
+  onShowToast: (msg: string) => void;
   aoSalvarTurno: (config: TurnoConfig, senha: string) => Promise<void>;
   aoAdicionarPreparador: (nome: string) => Promise<void>;
   aoDeletarPreparador: (nome: string, senha: string) => Promise<void>;
@@ -39,6 +43,9 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
   tarefas1,
   tarefas2,
   tarefasPendencias,
+  storeData,
+  aoAtualizarStore,
+  onShowToast,
   aoSalvarTurno,
   aoAdicionarPreparador,
   aoDeletarPreparador,
@@ -243,6 +250,13 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Google Sheets Real-Time Synchronization Card */}
+      <PainelGoogleSheets
+        storeData={storeData}
+        aoAtualizarStore={aoAtualizarStore}
+        onShowToast={onShowToast}
+      />
 
       {/* Row 1: Shift config & Machines */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

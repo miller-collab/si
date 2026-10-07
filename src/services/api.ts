@@ -1,6 +1,4 @@
-import type { StoreData, SetupAtivo, TurnoConfig } from '../types';
-import { db } from '../firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import type { StoreData, SetupAtivo, TurnoConfig, GoogleSheetConfig, SetupConcluido, Maquina } from '../types';
 
 const STORAGE_KEY = 'setup_interno_local_cache';
 
@@ -22,87 +20,7 @@ export class SetupApiService {
     return null;
   }
 
-  public static async pushToFirestore(data: StoreData) {
-    try {
-      const docRef = doc(db, 'app_state', 'main_store');
-      await setDoc(docRef, {
-        dataJson: JSON.stringify(data),
-        updatedAt: Date.now(),
-        totalAtivos: Object.keys(data.setupsAtivos || {}).length,
-        totalConcluidos: (data.concluidos || []).length
-      });
-    } catch (err: any) {
-      // Safe catch: never block app if Firestore quota is temporarily reached
-      console.warn('Sincronização Firestore mirror:', err?.message || err);
-    }
-  }
-
-  /**
-   * Real-time listener supporting dual transport:
-   * 1. Primary: Server-Sent Events (SSE) direct from backend (0ms latency, zero quota limits)
-   * 2. Secondary: Cloud Firestore onSnapshot (persists across containers)
-   */
-  public static listenRealtime(callback: (data: StoreData) => void): () => void {
-    let sseSource: EventSource | null = null;
-    let isSubscribed = true;
-
-    // 1. Connect to Backend Server-Sent Events stream
-    try {
-      sseSource = new EventSource('/api/setup/events');
-      sseSource.onmessage = (event) => {
-        if (!isSubscribed) return;
-        try {
-          if (event.data && event.data.trim()) {
-            const parsed: StoreData = JSON.parse(event.data);
-            this.setCache(parsed, false);
-            callback(parsed);
-          }
-        } catch (e) {
-          console.warn('Erro ao processar evento SSE:', e);
-        }
-      };
-      sseSource.onerror = () => {
-        // SSE automatically reconnects
-      };
-    } catch (e) {
-      console.warn('EventSource indisponível no navegador:', e);
-    }
-
-    // 2. Also listen to Firestore as a secondary stream
-    let unsubscribeFirestore = () => {};
-    try {
-      const docRef = doc(db, 'app_state', 'main_store');
-      unsubscribeFirestore = onSnapshot(
-        docRef,
-        (snapshot) => {
-          if (!isSubscribed) return;
-          if (snapshot.exists()) {
-            const raw = snapshot.data();
-            if (raw && raw.dataJson) {
-              try {
-                const parsed: StoreData = JSON.parse(raw.dataJson);
-                this.setCache(parsed, false);
-                callback(parsed);
-              } catch (_) {}
-            }
-          }
-        },
-        (error) => {
-          console.warn('Firestore snapshot indisponível (usando SSE em tempo real):', error?.message);
-        }
-      );
-    } catch (_) {}
-
-    return () => {
-      isSubscribed = false;
-      if (sseSource) {
-        sseSource.close();
-      }
-      unsubscribeFirestore();
-    };
-  }
-
-  public static setCache(data: StoreData, pushCloud: boolean = true) {
+  public static setCache(data: StoreData) {
     this.cachedData = data;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -110,9 +28,6 @@ export class SetupApiService {
       console.warn('Erro ao gravar cache local:', e);
     }
     this.notify(data);
-    if (pushCloud) {
-      this.pushToFirestore(data);
-    }
   }
 
   public static subscribe(listener: (data: StoreData) => void) {
@@ -143,7 +58,7 @@ export class SetupApiService {
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data: StoreData = await res.json();
-      this.setCache(data, false);
+      this.setCache(data);
       return data;
     } catch (err) {
       const cached = this.getCachedData();
@@ -155,7 +70,7 @@ export class SetupApiService {
   public static async iniciarSetup(rowId: string, maquina: string, peca: string, modeloAnterior: string): Promise<SetupAtivo> {
     const agora = Date.now();
     const d = new Date(agora);
-    const dataInicioStr = `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const dataInicioStr = `${d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`;
 
     const res = await fetch('/api/setup/iniciar', {
       method: 'POST',
@@ -171,7 +86,7 @@ export class SetupApiService {
     });
     if (!res.ok) throw new Error('Falha ao iniciar setup');
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
     return json.setup;
   }
 
@@ -223,7 +138,7 @@ export class SetupApiService {
       body: JSON.stringify({ id, motivo })
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err = await res.json();
       throw new Error(err.error || 'Falha ao finalizar parada');
     }
     const json = await res.json();
@@ -244,7 +159,7 @@ export class SetupApiService {
     });
     if (!res.ok) throw new Error('Falha ao liberar máquina');
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
     return json;
   }
 
@@ -256,7 +171,7 @@ export class SetupApiService {
     });
     if (!res.ok) throw new Error('Falha ao encerrar pendências');
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
     return json.sucesso;
   }
 
@@ -267,11 +182,11 @@ export class SetupApiService {
       body: JSON.stringify({ maquinaId, senha })
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err = await res.json();
       throw new Error(err.error || 'Senha incorreta');
     }
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
   }
 
   public static async deletarMaquina(maquinaId: string, senha: string): Promise<void> {
@@ -281,11 +196,11 @@ export class SetupApiService {
       body: JSON.stringify({ maquinaId, senha })
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err = await res.json();
       throw new Error(err.error || 'Senha incorreta');
     }
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
   }
 
   public static async limparMaquinas(senha: string): Promise<void> {
@@ -295,11 +210,11 @@ export class SetupApiService {
       body: JSON.stringify({ senha })
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err = await res.json();
       throw new Error(err.error || 'Senha incorreta');
     }
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
   }
 
   public static async deletarPreparador(nome: string, senha: string): Promise<void> {
@@ -309,11 +224,11 @@ export class SetupApiService {
       body: JSON.stringify({ nome, senha })
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err = await res.json();
       throw new Error(err.error || 'Senha incorreta');
     }
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
   }
 
   public static async salvarTarefas(grupo: 'parte1' | 'parte2' | 'pendencias', tarefas: string[], senha: string): Promise<void> {
@@ -323,11 +238,11 @@ export class SetupApiService {
       body: JSON.stringify({ grupo, tarefas, senha })
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err = await res.json();
       throw new Error(err.error || 'Senha incorreta');
     }
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
   }
 
   public static async salvarTurno(turnoConfig: TurnoConfig, senha: string): Promise<void> {
@@ -337,11 +252,11 @@ export class SetupApiService {
       body: JSON.stringify({ turnoConfig, senha })
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err = await res.json();
       throw new Error(err.error || 'Senha incorreta');
     }
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
   }
 
   public static async adicionarMaquina(maquina: string, peca: string): Promise<void> {
@@ -352,7 +267,7 @@ export class SetupApiService {
     });
     if (!res.ok) throw new Error('Falha ao adicionar máquina');
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
   }
 
   public static async adicionarPreparador(nome: string): Promise<void> {
@@ -363,42 +278,32 @@ export class SetupApiService {
     });
     if (!res.ok) throw new Error('Falha ao adicionar preparador');
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
   }
 
   public static async esvaziarConcluidos(senha?: string): Promise<void> {
     const res = await fetch('/api/setup/esvaziar-concluidos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ senha: senha || '8619' })
+      body: JSON.stringify({ senha })
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Falha ao esvaziar registros');
-    }
+    if (!res.ok) throw new Error('Falha ao esvaziar registros');
     const json = await res.json();
-    if (json.data) {
-      this.setCache(json.data, true);
-    } else {
-      const current = this.getCachedData();
-      if (current) {
-        this.setCache({ ...current, concluidos: [] }, true);
-      }
-    }
+    if (json.data) this.setCache(json.data);
   }
 
   public static async carregarDados(backup: any, senha?: string): Promise<void> {
     const res = await fetch('/api/setup/carregar-dados', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ backup, senha: senha || '8619' })
+      body: JSON.stringify({ backup, senha })
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err = await res.json();
       throw new Error(err.error || 'Falha ao carregar dados');
     }
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
   }
 
   public static async resetDemo(): Promise<void> {
@@ -408,6 +313,28 @@ export class SetupApiService {
     });
     if (!res.ok) throw new Error('Falha ao reiniciar demonstração');
     const json = await res.json();
-    if (json.data) this.setCache(json.data, true);
+    if (json.data) this.setCache(json.data);
+  }
+
+  public static async salvarSheetConfig(sheetConfig?: GoogleSheetConfig): Promise<void> {
+    const res = await fetch('/api/setup/sheets-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sheetConfig })
+    });
+    if (!res.ok) throw new Error('Falha ao salvar configuração da planilha');
+    const json = await res.json();
+    if (json.data) this.setCache(json.data);
+  }
+
+  public static async mesclarPlanilha(concluidos?: SetupConcluido[], maquinas?: Maquina[]): Promise<void> {
+    const res = await fetch('/api/setup/mesclar-planilha', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ concluidos, maquinas })
+    });
+    if (!res.ok) throw new Error('Falha ao mesclar dados da planilha');
+    const json = await res.json();
+    if (json.data) this.setCache(json.data);
   }
 }

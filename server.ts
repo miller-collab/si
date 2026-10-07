@@ -3,9 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import type { StoreData, SetupAtivo, SetupConcluido, TurnoConfig, ParadaEvento, Maquina } from './src/types';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import type { StoreData, SetupAtivo, SetupConcluido, TurnoConfig, ParadaEvento, Maquina, GoogleSheetConfig } from './src/types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,28 +11,37 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.resolve(__dirname, 'data');
 const DATA_FILE = path.resolve(DATA_DIR, 'setup_store.json');
 
-// Initialize Firebase for centralized multi-server/multi-tablet sync
-const firebaseConfigPath = path.resolve(__dirname, 'firebase-applet-config.json');
-let firestoreDb: any = null;
-if (fs.existsSync(firebaseConfigPath)) {
-  try {
-    const fbConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
-    const fbApp = getApps().length > 0 ? getApp() : initializeApp(fbConfig);
-    firestoreDb = fbConfig.firestoreDatabaseId && fbConfig.firestoreDatabaseId !== '(default)'
-      ? getFirestore(fbApp, fbConfig.firestoreDatabaseId)
-      : getFirestore(fbApp);
-    console.log('Centralized Cloud Firestore initialized in backend server.');
-  } catch (e) {
-    console.warn('Erro ao inicializar Firebase no backend:', e);
-  }
-}
-
 function formatarTempoStr(ms: number): string {
   const totalSeg = Math.floor(Math.max(0, ms) / 1000);
   const h = Math.floor(totalSeg / 3600);
   const m = Math.floor((totalSeg % 3600) / 60);
   const s = totalSeg % 60;
   return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':');
+}
+
+function getDataHoraSP(date: Date | number = new Date()): string {
+  const d = typeof date === 'number' ? new Date(date) : date;
+  return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+function getHoraSP(date: Date | number = new Date()): string {
+  const d = typeof date === 'number' ? new Date(date) : date;
+  return d.toLocaleTimeString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function getDataHoraCurtaSP(date: Date | number = new Date()): string {
+  const d = typeof date === 'number' ? new Date(date) : date;
+  const data = d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const hora = d.toLocaleTimeString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  return `${data} às ${hora}`;
 }
 
 const INITIAL_MAQUINAS: Maquina[] = [];
@@ -94,84 +101,15 @@ const INITIAL_TURNO: TurnoConfig = {
   fim: '17:00'
 };
 
-const agoraMs = Date.now();
-
 const INITIAL_SETUPS_ATIVOS: Record<string, SetupAtivo> = {};
 
-const INITIAL_CONCLUIDOS: SetupConcluido[] = [
-  {
-    id: 'conc_1',
-    data: '01/10/2026 16:45',
-    timestamp: agoraMs - 24 * 3600 * 1000,
-    maquina: 'TC18',
-    peca: 'AL1526X0 (TRYOUT)',
-    modeloAnterior: 'PC600',
-    prep1: 'GABRIEL',
-    prep2: 'IGOR',
-    tempo: '02:47:35',
-    tempoMs: 2 * 3600 * 1000 + 47 * 60 * 1000 + 35 * 1000,
-    historico: '[01/10/2026 14:00] Início TC18 | [15:00 às 15:15] Café (-15m) | [15:20 às 15:45] Parada (00:25:00): Ajuste de ferramenta especial e conferência de folgas | [01/10/2026 16:45] Fim do Setup (Liberado)',
-    pendenciasConcluidas: true
-  },
-  {
-    id: 'conc_2',
-    data: '01/10/2026 12:20',
-    timestamp: agoraMs - 28 * 3600 * 1000,
-    maquina: 'TC03',
-    peca: 'A2016024',
-    modeloAnterior: 'BD1402',
-    prep1: 'GABRIEL',
-    prep2: 'CAIO',
-    tempo: '01:41:00',
-    tempoMs: 1 * 3600 * 1000 + 41 * 60 * 1000,
-    historico: '[01/10/2026 10:40] Início TC03 | [11:30 às 11:50] Parada (00:20:00): Troca de pinças do alimentador | [01/10/2026 12:20] Fim do Setup (Liberado)',
-    pendenciasConcluidas: true
-  }
-];
-
-const sseClients: Set<express.Response> = new Set();
-
-function broadcastStoreData(data: StoreData) {
-  const payload = `data: ${JSON.stringify(data)}\n\n`;
-  for (const client of sseClients) {
-    try {
-      client.write(payload);
-    } catch (_) {
-      sseClients.delete(client);
-    }
-  }
-}
+const INITIAL_CONCLUIDOS: SetupConcluido[] = [];
 
 class StoreManager {
   private data: StoreData;
 
   constructor() {
     this.data = this.loadData();
-    this.initCloudSync();
-  }
-
-  private initCloudSync() {
-    if (!firestoreDb) return;
-    try {
-      onSnapshot(doc(firestoreDb, 'app_state', 'main_store'), (snap) => {
-        if (snap.exists()) {
-          const raw = snap.data();
-          if (raw && raw.dataJson) {
-            try {
-              const cloudData = JSON.parse(raw.dataJson);
-              if (cloudData && typeof cloudData === 'object') {
-                this.data = cloudData;
-                this.saveDataDirect(cloudData);
-              }
-            } catch (err) {
-              console.warn('Erro ao decodificar Firestore no backend:', err);
-            }
-          }
-        }
-      }, (err) => console.warn('Erro listener Firestore backend:', err));
-    } catch (err) {
-      console.warn('Erro ao conectar listener Firestore no backend:', err);
-    }
   }
 
   private loadData(): StoreData {
@@ -205,7 +143,8 @@ class StoreManager {
           tarefasPendencias: parsed.tarefasPendencias || INITIAL_TAREFAS_PENDENCIAS,
           turnoConfig: parsed.turnoConfig || INITIAL_TURNO,
           setupsAtivos,
-          concluidos: parsed.concluidos || INITIAL_CONCLUIDOS
+          concluidos: parsed.concluidos || INITIAL_CONCLUIDOS,
+          sheetConfig: parsed.sheetConfig || undefined
         };
       }
     } catch (err) {
@@ -241,15 +180,6 @@ class StoreManager {
 
   public save() {
     this.saveDataDirect(this.data);
-    broadcastStoreData(this.getData());
-    if (firestoreDb) {
-      setDoc(doc(firestoreDb, 'app_state', 'main_store'), {
-        dataJson: JSON.stringify(this.data),
-        updatedAt: Date.now(),
-        totalAtivos: Object.keys(this.data.setupsAtivos || {}).length,
-        totalConcluidos: (this.data.concluidos || []).length
-      }).catch((err: any) => console.warn('Erro ao salvar no Firestore via backend:', err?.message || err));
-    }
   }
 
   public getData(): StoreData {
@@ -269,8 +199,7 @@ class StoreManager {
   ): SetupAtivo {
     const agora = clientInicioMs || Date.now();
     const id = `setup_${Date.now()}`;
-    const dh = new Date(agora);
-    const dataInicioStr = clientDataInicioStr || `${dh.toLocaleDateString('pt-BR')} às ${dh.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const dataInicioStr = clientDataInicioStr || getDataHoraCurtaSP(agora);
 
     const novoSetup: SetupAtivo = {
       id,
@@ -332,8 +261,8 @@ class StoreManager {
     const setup = this.data.setupsAtivos[id];
     if (!setup) return null;
 
-    const dh = new Date();
-    const strDH = `${dh.toLocaleDateString('pt-BR')} ${dh.toLocaleTimeString('pt-BR')}`;
+    const agora = Date.now();
+    const strDH = getDataHoraSP(agora);
 
     if (tipo === 'cafe') {
       setup.deductionsMs += 15 * 60 * 1000;
@@ -366,8 +295,8 @@ class StoreManager {
     const setup = this.data.setupsAtivos[id];
     if (!setup) return null;
 
-    const dh = new Date();
-    const strDH = `${dh.toLocaleDateString('pt-BR')} ${dh.toLocaleTimeString('pt-BR')}`;
+    const agora = Date.now();
+    const strDH = getDataHoraSP(agora);
     const eventoId = `parada_${Date.now()}`;
 
     const novoEvento: ParadaEvento = {
@@ -375,7 +304,7 @@ class StoreManager {
       timestamp: strDH,
       tipo: 'parada',
       motivo: motivo.trim() || 'Parada iniciada',
-      inicioMs: Date.now(),
+      inicioMs: agora,
       emAndamento: true
     };
 
@@ -392,9 +321,8 @@ class StoreManager {
     const setup = this.data.setupsAtivos[id];
     if (!setup) return null;
 
-    const dh = new Date();
-    const strDH = `${dh.toLocaleDateString('pt-BR')} ${dh.toLocaleTimeString('pt-BR')}`;
     const agora = Date.now();
+    const strDH = getDataHoraSP(agora);
 
     setup.paradaAtiva = false;
     if (setup.paradaAtual) {
@@ -417,8 +345,8 @@ class StoreManager {
       }
 
       const duracaoFormatada = formatarTempoStr(duracaoMs);
-      const horaIni = new Date(setup.paradaAtual.inicioMs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      const horaFim = dh.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const horaIni = getHoraSP(setup.paradaAtual.inicioMs);
+      const horaFim = getHoraSP(agora);
       setup.historico.push(`[${horaIni} às ${horaFim}] Parada (${duracaoFormatada}): ${motivoObrigatorio.trim()}`);
       setup.paradaAtual = undefined;
     } else {
@@ -434,8 +362,8 @@ class StoreManager {
     const setup = this.data.setupsAtivos[id];
     if (!setup) return null;
 
-    const dh = new Date();
-    const dataStr = `${dh.toLocaleDateString('pt-BR')} ${dh.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const agora = Date.now();
+    const dataStr = getDataHoraCurtaSP(agora);
 
     setup.setupRegistrado = true;
     setup.prep1Val = prep1;
@@ -562,6 +490,36 @@ class StoreManager {
     if (Array.isArray(backup.tarefasPendencias)) {
       this.data.tarefasPendencias = backup.tarefasPendencias;
     }
+    if (backup.sheetConfig) {
+      this.data.sheetConfig = backup.sheetConfig;
+    }
+    this.save();
+  }
+
+  public salvarSheetConfig(config: GoogleSheetConfig | undefined) {
+    this.data.sheetConfig = config;
+    this.save();
+  }
+
+  public sincronizarDePlanilha(novosConcluidos?: SetupConcluido[], novasMaquinas?: Maquina[]) {
+    if (Array.isArray(novosConcluidos) && novosConcluidos.length > 0) {
+      const existingIds = new Set(this.data.concluidos.map(c => c.id));
+      for (const item of novosConcluidos) {
+        if (!existingIds.has(item.id)) {
+          this.data.concluidos.unshift(item);
+          existingIds.add(item.id);
+        }
+      }
+    }
+    if (Array.isArray(novasMaquinas) && novasMaquinas.length > 0) {
+      const existingIds = new Set(this.data.maquinas.map(m => String(m.id)));
+      for (const m of novasMaquinas) {
+        if (!existingIds.has(String(m.id))) {
+          this.data.maquinas.push(m);
+          existingIds.add(String(m.id));
+        }
+      }
+    }
     this.save();
   }
 
@@ -595,32 +553,6 @@ async function startServer() {
   });
 
   // API Endpoints
-  // Real-time Server-Sent Events stream for instant synchronization across all tablets and PCs
-  app.get('/api/setup/events', (req, res) => {
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*'
-    });
-    res.write(`data: ${JSON.stringify(store.getData())}\n\n`);
-    sseClients.add(res);
-
-    const keepAlive = setInterval(() => {
-      try {
-        res.write(': ping\n\n');
-      } catch (_) {
-        clearInterval(keepAlive);
-        sseClients.delete(res);
-      }
-    }, 15000);
-
-    req.on('close', () => {
-      clearInterval(keepAlive);
-      sseClients.delete(res);
-    });
-  });
-
   app.get('/api/setup/sync', (req, res) => {
     res.json(store.getData());
   });
@@ -790,6 +722,24 @@ async function startServer() {
 
   app.post('/api/setup/reset-demo', (req, res) => {
     store.resetDemoData();
+    res.json({ sucesso: true, data: store.getData() });
+  });
+
+  // Google Sheets integration configuration and remote sync
+  app.get('/api/setup/sheets-config', (req, res) => {
+    const data = store.getData();
+    res.json({ sheetConfig: data.sheetConfig || null });
+  });
+
+  app.post('/api/setup/sheets-config', (req, res) => {
+    const { sheetConfig } = req.body;
+    store.salvarSheetConfig(sheetConfig);
+    res.json({ sucesso: true, data: store.getData() });
+  });
+
+  app.post('/api/setup/mesclar-planilha', (req, res) => {
+    const { concluidos, maquinas } = req.body;
+    store.sincronizarDePlanilha(concluidos, maquinas);
     res.json({ sucesso: true, data: store.getData() });
   });
 
