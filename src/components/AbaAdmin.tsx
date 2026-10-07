@@ -14,7 +14,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import type { TurnoConfig, Maquina, StoreData } from '../types';
-import { PainelGoogleSheets } from './PainelGoogleSheets';
+import { PainelFirebaseBackups } from './PainelFirebaseBackups';
 
 interface AbaAdminProps {
   turnoConfig: TurnoConfig;
@@ -34,6 +34,8 @@ interface AbaAdminProps {
   aoLimparMaquinas: (senha: string) => Promise<void>;
   aoSalvarTarefas: (grupo: 'parte1' | 'parte2' | 'pendencias', tarefas: string[], senha: string) => Promise<void>;
   aoResetDemo: () => Promise<void>;
+  aoRestaurarBackup: (dados: StoreData) => Promise<void>;
+  aoResetarTudo: (senha: string) => Promise<void>;
 }
 
 export const AbaAdmin: React.FC<AbaAdminProps> = ({
@@ -53,7 +55,9 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
   aoDeletarMaquina,
   aoLimparMaquinas,
   aoSalvarTarefas,
-  aoResetDemo
+  aoResetDemo,
+  aoRestaurarBackup,
+  aoResetarTudo
 }) => {
   const [autenticado, setAutenticado] = useState(false);
   const [senha, setSenha] = useState('');

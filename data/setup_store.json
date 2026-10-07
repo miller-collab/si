@@ -1,30 +1,5 @@
 {
-  "maquinas": [
-    {
-      "id": "sheet_maq_0_TC12",
-      "maquina": "TC12",
-      "peca": "PL122",
-      "setupExternoPronto": true
-    },
-    {
-      "id": "sheet_maq_1_TC09",
-      "maquina": "TC09",
-      "peca": "BF1458",
-      "setupExternoPronto": true
-    },
-    {
-      "id": "1791377383169",
-      "maquina": "TC11",
-      "peca": "PL897",
-      "setupExternoPronto": true
-    },
-    {
-      "id": "1791377012841",
-      "maquina": "TC16",
-      "peca": "HY789",
-      "setupExternoPronto": false
-    }
-  ],
+  "maquinas": [],
   "preparadores": [
     "GABRIEL",
     "CAIO",
@@ -81,28 +56,5 @@
     "fim": "17:00"
   },
   "setupsAtivos": {},
-  "concluidos": [
-    {
-      "id": "conc_1791377888424",
-      "data": "07/10/2026 às 09:58",
-      "timestamp": 1791377889024,
-      "maquina": "TC12",
-      "peca": "PL122",
-      "modeloAnterior": "PL369",
-      "prep1": "CAIO",
-      "prep2": "CAIO",
-      "tempo": "00:01:25",
-      "tempoMs": 85778,
-      "historico": "[07/10/2026 às 09:55] Início do setup | [07/10/2026, 09:56:31] Parada iniciada: Parada em andamento | [09:56 às 09:57] Parada (00:01:08): GFDFS",
-      "pendenciasConcluidas": true
-    }
-  ],
-  "sheetConfig": {
-    "spreadsheetId": "1jXncBCooTpLgXCeB19V2PdhcSQEc-ETqoL-dmTHmLC0",
-    "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1jXncBCooTpLgXCeB19V2PdhcSQEc-ETqoL-dmTHmLC0/edit?gid=1557080322#gid=1557080322",
-    "spreadsheetTitle": "SETUPINTERNO",
-    "autoSyncAtivo": true,
-    "ultimaSync": "07/10/2026, 08:36:25",
-    "sincronizadoPor": "miller@ds.ind.br"
-  }
+  "concluidos": []
 }
