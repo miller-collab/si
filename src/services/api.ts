@@ -316,6 +316,30 @@ export class SetupApiService {
     if (json.data) this.setCache(json.data);
   }
 
+  public static async cancelarSetupAtivo(id: string): Promise<StoreData | null> {
+    const res = await fetch('/api/setup/cancelar-setup-ativo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    if (!res.ok) throw new Error('Falha ao cancelar setup ativo');
+    const json = await res.json();
+    if (json.data) this.setCache(json.data);
+    return json.data || null;
+  }
+
+  public static async resetTotal(senha?: string): Promise<StoreData> {
+    const res = await fetch('/api/setup/reset-total', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senha })
+    });
+    if (!res.ok) throw new Error('Falha ao resetar o aplicativo');
+    const json = await res.json();
+    if (json.data) this.setCache(json.data);
+    return json.data;
+  }
+
   public static async salvarSheetConfig(sheetConfig?: GoogleSheetConfig): Promise<void> {
     const res = await fetch('/api/setup/sheets-config', {
       method: 'POST',

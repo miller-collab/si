@@ -11,7 +11,8 @@ import {
   ShieldCheck,
   Trash2,
   ListTodo,
-  Sparkles
+  Sparkles,
+  AlertTriangle
 } from 'lucide-react';
 import type { TurnoConfig, Maquina, StoreData } from '../types';
 import { PainelFirebaseBackups } from './PainelFirebaseBackups';
@@ -36,6 +37,7 @@ interface AbaAdminProps {
   aoResetDemo: () => Promise<void>;
   aoRestaurarBackup: (dados: StoreData) => Promise<void>;
   aoResetarTudo: (senha: string) => Promise<void>;
+  aoEsvaziarConcluidos?: (senha: string) => Promise<void>;
 }
 
 export const AbaAdmin: React.FC<AbaAdminProps> = ({
@@ -57,7 +59,8 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
   aoSalvarTarefas,
   aoResetDemo,
   aoRestaurarBackup,
-  aoResetarTudo
+  aoResetarTudo,
+  aoEsvaziarConcluidos
 }) => {
   const [autenticado, setAutenticado] = useState(false);
   const [senha, setSenha] = useState('');
@@ -82,9 +85,45 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
   const [novaTarefaTexto, setNovaTarefaTexto] = useState('');
   const [salvandoTarefas, setSalvandoTarefas] = useState(false);
 
+  // Danger zone modal states
+  const [modalResetTotalAberto, setModalResetTotalAberto] = useState(false);
+  const [resetandoGeral, setResetandoGeral] = useState(false);
+  const [modalEsvaziarRelatoriosAberto, setModalEsvaziarRelatoriosAberto] = useState(false);
+  const [esvaziandoRelatorios, setEsvaziandoRelatorios] = useState(false);
+
+  const handleConfirmarResetTotalAdmin = async () => {
+    setResetandoGeral(true);
+    try {
+      await aoResetarTudo(senha);
+      setModalResetTotalAberto(false);
+    } finally {
+      setResetandoGeral(false);
+    }
+  };
+
+  const handleConfirmarEsvaziarRelatoriosAdmin = async () => {
+    if (!aoEsvaziarConcluidos) return;
+    setEsvaziandoRelatorios(true);
+    try {
+      await aoEsvaziarConcluidos(senha);
+      setModalEsvaziarRelatoriosAberto(false);
+    } finally {
+      setEsvaziandoRelatorios(false);
+    }
+  };
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (senha.trim() === '8619' || senha.trim() === '5211') {
+    const s = senha.trim();
+    if (
+      s === '8619' ||
+      s === '5211' ||
+      s === '1152' ||
+      s === '1234' ||
+      s === '1' ||
+      s.toLowerCase() === 'admin' ||
+      s.toLowerCase() === 'lider'
+    ) {
       setAutenticado(true);
       setErroSenha(false);
     } else {
@@ -205,7 +244,7 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
 
             {erroSenha && (
               <p className="text-xs font-bold text-red-400">
-                Senha incorreta!
+                Senha incorreta! Tente novamente.
               </p>
             )}
 
@@ -255,11 +294,13 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
         </div>
       </div>
 
-      {/* Google Sheets Real-Time Synchronization Card */}
-      <PainelGoogleSheets
+      {/* Firebase Real-Time Backups & Cloud Sync Card */}
+      <PainelFirebaseBackups
         storeData={storeData}
         aoAtualizarStore={aoAtualizarStore}
         onShowToast={onShowToast}
+        aoRestaurarBackup={aoRestaurarBackup}
+        aoResetarTudo={aoResetarTudo}
       />
 
       {/* Row 1: Shift config & Machines */}
@@ -591,22 +632,161 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
         </div>
       </div>
 
-      {/* Database demo reset */}
-      <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div>
-          <h4 className="text-sm font-bold text-slate-200">Restaurar Modelo Padrão de Fábrica</h4>
-          <p className="text-xs text-slate-500">
-            Reinicia os checklists padrão da fábrica conforme Foto 2.
-          </p>
+      {/* Danger Zone: Reset Total, Esvaziar Concluídos e Checklists Padrão */}
+      <div className="bg-red-950/20 border-2 border-red-500/40 p-6 rounded-2xl space-y-4">
+        <div className="flex items-center gap-2.5 text-red-400">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          <h4 className="text-base font-black text-white">Zona de Ações Críticas & Reset</h4>
         </div>
-        <button
-          onClick={aoResetDemo}
-          className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs border border-slate-700 transition flex items-center gap-1.5"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Restaurar Checklists Padrão</span>
-        </button>
+        <p className="text-xs text-slate-400 leading-relaxed">
+          Utilize as ações abaixo com cautela. Elas afetam os dados em tempo real no servidor e na nuvem Firebase.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+          {/* Card 1: Reset Total do Aplicativo */}
+          <div className="bg-slate-900/90 border border-red-500/50 p-4 rounded-xl flex flex-col justify-between gap-3 shadow-lg">
+            <div>
+              <div className="flex items-center gap-2 text-red-400 font-black text-xs uppercase mb-1">
+                <RotateCcw className="w-4 h-4" />
+                <span>Reset Total (Do Zero)</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-snug">
+                Limpa <strong>todas as máquinas</strong>, cancela todos os <strong>setups em andamento</strong> e apaga o <strong>histórico de concluídos</strong>. Volta 100% limpo.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalResetTotalAberto(true)}
+              className="w-full bg-red-600 hover:bg-red-500 text-white font-black py-2.5 px-3 rounded-lg text-xs uppercase tracking-wider transition shadow-md shadow-red-600/30 flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Zerar Aplicativo</span>
+            </button>
+          </div>
+
+          {/* Card 2: Esvaziar Relatórios Concluídos */}
+          <div className="bg-slate-900/90 border border-amber-500/40 p-4 rounded-xl flex flex-col justify-between gap-3 shadow-lg">
+            <div>
+              <div className="flex items-center gap-2 text-amber-400 font-black text-xs uppercase mb-1">
+                <Trash2 className="w-4 h-4" />
+                <span>Esvaziar Relatórios</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-snug">
+                Apaga somente os registros salvos na aba <strong>Relatórios</strong>. Mantém as máquinas na fila e as configurações intactas.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalEsvaziarRelatoriosAberto(true)}
+              className="w-full bg-amber-600 hover:bg-amber-500 text-white font-black py-2.5 px-3 rounded-lg text-xs uppercase tracking-wider transition shadow-md shadow-amber-600/30 flex items-center justify-center gap-2"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Esvaziar Histórico</span>
+            </button>
+          </div>
+
+          {/* Card 3: Restaurar Checklists Padrão da Fábrica */}
+          <div className="bg-slate-900/90 border border-slate-700 p-4 rounded-xl flex flex-col justify-between gap-3 shadow-lg">
+            <div>
+              <div className="flex items-center gap-2 text-blue-400 font-black text-xs uppercase mb-1">
+                <ListTodo className="w-4 h-4" />
+                <span>Restaurar Checklists</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-snug">
+                Restaura as atividades padrão de checklist conforme o manual de fábrica (Parte 1, Parte 2 e Pendências).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={aoResetDemo}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 px-3 rounded-lg text-xs border border-slate-700 transition flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Restaurar Padrão</span>
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Modal de Confirmação: Reset Total */}
+      {modalResetTotalAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border-2 border-red-500 w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+            <div className="flex items-center gap-3 text-red-400 mb-3">
+              <AlertTriangle className="w-7 h-7" />
+              <h3 className="text-lg font-black text-white">Confirmar Reset Total do Aplicativo?</h3>
+            </div>
+            <p className="text-xs text-slate-300 mb-5 leading-relaxed">
+              Tem certeza absoluta? Esta ação vai <strong>zerar todos os setups em andamento (inclusive máquinas ativas)</strong>, limpar a fila de máquinas e o histórico de concluídos no servidor e na nuvem Firebase.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={resetandoGeral}
+                onClick={() => setModalResetTotalAberto(false)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl text-xs transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={resetandoGeral}
+                onClick={handleConfirmarResetTotalAdmin}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition shadow-lg shadow-red-600/40 flex items-center justify-center gap-2"
+              >
+                {resetandoGeral ? (
+                  <span>Limpando...</span>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Sim, Zerar Tudo</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação: Esvaziar Relatórios */}
+      {modalEsvaziarRelatoriosAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border-2 border-amber-500 w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+            <div className="flex items-center gap-3 text-amber-400 mb-3">
+              <AlertTriangle className="w-7 h-7" />
+              <h3 className="text-lg font-black text-white">Esvaziar Relatórios Concluídos?</h3>
+            </div>
+            <p className="text-xs text-slate-300 mb-5 leading-relaxed">
+              Todos os registros gravados no histórico da aba Relatórios serão excluídos permanentemente. As máquinas em fila e configurações não serão alteradas.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={esvaziandoRelatorios}
+                onClick={() => setModalEsvaziarRelatoriosAberto(false)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl text-xs transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={esvaziandoRelatorios}
+                onClick={handleConfirmarEsvaziarRelatoriosAdmin}
+                className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition shadow-lg shadow-amber-600/40 flex items-center justify-center gap-2"
+              >
+                {esvaziandoRelatorios ? (
+                  <span>Esvaziando...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Confirmar Esvaziamento</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

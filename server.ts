@@ -407,6 +407,15 @@ class StoreManager {
     return true;
   }
 
+  public cancelarSetupAtivo(id: string): boolean {
+    if (this.data.setupsAtivos[id]) {
+      delete this.data.setupsAtivos[id];
+      this.save();
+      return true;
+    }
+    return false;
+  }
+
   public toggleSetupExterno(maquinaId: string): boolean {
     const m = this.data.maquinas.find(
       item => String(item.id) === String(maquinaId) || item.maquina.toUpperCase() === String(maquinaId).toUpperCase()
@@ -590,6 +599,20 @@ class StoreManager {
     };
     this.save();
   }
+
+  public resetTotal() {
+    this.data = {
+      maquinas: [],
+      preparadores: INITIAL_PREPARADORES,
+      tarefas1: INITIAL_TAREFAS_PARTE_1,
+      tarefas2: INITIAL_TAREFAS_PARTE_2,
+      tarefasPendencias: INITIAL_TAREFAS_PENDENCIAS,
+      turnoConfig: INITIAL_TURNO,
+      setupsAtivos: {},
+      concluidos: []
+    };
+    this.save();
+  }
 }
 
 const store = new StoreManager();
@@ -670,6 +693,13 @@ async function startServer() {
     const { id } = req.body;
     if (!id) return res.status(400).json({ error: 'ID é obrigatório' });
     const result = store.encerrarPendencias(id);
+    res.json({ sucesso: result, data: store.getData() });
+  });
+
+  app.post('/api/setup/cancelar-setup-ativo', (req, res) => {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ error: 'ID é obrigatório' });
+    const result = store.cancelarSetupAtivo(id);
     res.json({ sucesso: result, data: store.getData() });
   });
 
@@ -776,6 +806,17 @@ async function startServer() {
 
   app.post('/api/setup/reset-demo', (req, res) => {
     store.resetDemoData();
+    res.json({ sucesso: true, data: store.getData() });
+  });
+
+  // Reset Total: clean app from zero without records
+  app.post('/api/setup/reset-total', (req, res) => {
+    const { senha } = req.body;
+    const s = String(senha || '').trim().toLowerCase();
+    if (s && s !== '8619' && s !== '5211' && s !== '1152' && s !== '1234' && s !== '1' && s !== 'admin' && s !== 'lider') {
+      return res.status(401).json({ error: 'Senha incorreta' });
+    }
+    store.resetTotal();
     res.json({ sucesso: true, data: store.getData() });
   });
 

@@ -14,6 +14,7 @@ import {
   Pause,
   History,
   ChevronDown,
+  Trash2,
   X
 } from 'lucide-react';
 import type { SetupAtivo, TurnoConfig } from '../types';
@@ -47,6 +48,7 @@ interface AbaSetupsAtivosProps {
     tempoMs: number
   ) => void;
   aoEncerrarPendencias: (id: string) => void;
+  aoCancelarSetupAtivo?: (id: string) => void;
   aoMudarParaIniciar: () => void;
 }
 
@@ -64,6 +66,7 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
   aoFinalizarParada,
   aoLiberarMaquina,
   aoEncerrarPendencias,
+  aoCancelarSetupAtivo,
   aoMudarParaIniciar
 }) => {
   // Unconditional 1-second live clock (empty dependency array so it NEVER resets or pauses)
@@ -97,6 +100,17 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
 
   // Modal alert for incomplete tasks when trying to release
   const [alertaIncompleto, setAlertaIncompleto] = useState<string | null>(null);
+
+  // Modal to cancel/delete active setup
+  const [modalCancelarSetup, setModalCancelarSetup] = useState<{
+    aberto: boolean;
+    setupId: string | null;
+    maquina: string;
+  }>({
+    aberto: false,
+    setupId: null,
+    maquina: ''
+  });
 
   const ids = Object.keys(setupsAtivos);
 
@@ -482,6 +496,24 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
                         <Check className="w-3 h-3" />
                         Salvo
                       </span>
+                    )}
+
+                    {/* Botão Cancelar/Excluir Card Ativo */}
+                    {aoCancelarSetupAtivo && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setModalCancelarSetup({
+                            aberto: true,
+                            setupId: id,
+                            maquina: setup.maquina
+                          })
+                        }
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-800 transition"
+                        title={`Cancelar setup de ${setup.maquina} e remover da tela`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     )}
                   </div>
 
@@ -985,6 +1017,46 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
             >
               Entendido, vou concluir as tarefas
             </button>
+          </div>
+        </div>
+      )}
+      {/* Modal confirmation to cancel/remove active setup */}
+      {modalCancelarSetup.aberto && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-red-500/60 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <div className="flex items-center gap-2.5 text-red-400 mb-3">
+              <Trash2 className="w-6 h-6" />
+              <h3 className="text-lg font-black text-white">
+                Cancelar Setup ({modalCancelarSetup.maquina})?
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-6 leading-relaxed">
+              Deseja realmente cancelar este setup em andamento e retirá-lo da tela de ativos? O cronômetro será finalizado e o card será removido.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setModalCancelarSetup({ aberto: false, setupId: null, maquina: '' })}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (modalCancelarSetup.setupId && aoCancelarSetupAtivo) {
+                    aoCancelarSetupAtivo(modalCancelarSetup.setupId);
+                  }
+                  setModalCancelarSetup({ aberto: false, setupId: null, maquina: '' });
+                }}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition shadow-lg shadow-red-600/30 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Sim, Cancelar Setup</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

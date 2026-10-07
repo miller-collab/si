@@ -1,19 +1,17 @@
-import { initializeApp, getApps } from 'firebase/app';
 import {
-  getFirestore,
   doc,
   getDoc,
   setDoc,
   onSnapshot,
   collection,
+  getDocs,
+  writeBatch,
+  deleteDoc,
   setDoc as setFirestoreDoc
 } from 'firebase/firestore';
 import type { StoreData, SetupConcluido } from '../types';
-import firebaseConfig from '../../firebase-applet-config.json';
-
-// Initialize Firebase App
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-export const db = getFirestore(app);
+import { db, app } from '../firebase';
+export { db, app };
 
 export interface FirebaseConnectionStatus {
   connected: boolean;
@@ -104,7 +102,7 @@ export class FirebaseService {
   }
 
   /**
-   * Grava o estado atual no documento mestre do Firestore
+   * Grava o estado atual no documento mestre do Firestore (sobrescreve 100% sem manter registros zumbis)
    */
   public static async salvarStore(data: StoreData): Promise<void> {
     try {
@@ -121,7 +119,8 @@ export class FirebaseService {
         updatedAt: Date.now()
       };
 
-      await setDoc(docRef, payload, { merge: true });
+      // Substitui integralmente o documento no Firestore para garantir exclusões imediatas
+      await setDoc(docRef, payload);
       this.isConnected = true;
       this.lastSyncTime = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
       this.lastError = null;
@@ -132,6 +131,20 @@ export class FirebaseService {
       this.notifyStatus();
       throw err;
     }
+  }
+
+  /**
+   * Remove um setup ativo específico do Firestore
+   */
+  public static async cancelarSetupAtivo(setupId: string, currentStore: StoreData): Promise<StoreData> {
+    const updatedAtivos = { ...(currentStore.setupsAtivos || {}) };
+    delete updatedAtivos[setupId];
+    const updatedStore: StoreData = {
+      ...currentStore,
+      setupsAtivos: updatedAtivos
+    };
+    await this.salvarStore(updatedStore);
+    return updatedStore;
   }
 
   /**
@@ -163,7 +176,8 @@ export class FirebaseService {
   }
 
   /**
-   * Realiza o RESET TOTAL do aplicativo no Firebase voltando do ZERO absoluto
+   * Realiza o RESET TOTAL do aplicativo no Firebase voltando do ZERO absoluto:
+   * Limpa setups ativos, máquinas e histórico de concluídos
    */
   public static async resetTotal(defaultChecklists: {
     preparadores: string[];
@@ -182,7 +196,21 @@ export class FirebaseService {
       turnoConfig: { dias: ['1', '2', '3', '4', '5'], inicio: '07:00', fim: '17:00' }
     };
 
+    // 1. Sobrescreve com documento 100% limpo
     await this.salvarStore(cleanStore);
+
+    // 2. Limpa também todos os documentos individuais na coleção setups_concluidos
+    try {
+      const snap = await getDocs(collection(db, 'setups_concluidos'));
+      if (!snap.empty) {
+        const batch = writeBatch(db);
+        snap.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+    } catch (e) {
+      console.warn('Aviso ao limpar coleção setups_concluidos:', e);
+    }
+
     return cleanStore;
   }
 

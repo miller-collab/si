@@ -41,28 +41,47 @@ export function extrairDetalhesCompletosSetup(gargalo: SetupConcluido): {
 
   // 2. Deduce start timestamp if missing
   if (!inicioSetupStr && gargalo.timestamp && gargalo.tempoMs) {
-    const d = new Date(gargalo.timestamp - gargalo.tempoMs);
-    inicioSetupStr = `${d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} ${d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`;
+    const diff = Number(gargalo.timestamp) - Number(gargalo.tempoMs);
+    if (!isNaN(diff) && diff > 0) {
+      try {
+        const d = new Date(diff);
+        if (!isNaN(d.getTime())) {
+          inicioSetupStr = `${d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} ${d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`;
+        }
+      } catch {
+        inicioSetupStr = gargalo.data || 'Início da contagem';
+      }
+    }
   }
 
   const linhasEventos: string[] = [];
 
   // Line: Start of setup
-  linhasEventos.push(`• INÍCIO DO SETUP: ${inicioSetupStr || 'Início da contagem'} — Abertura e início da contagem oficial da máquina ${gargalo.maquina}`);
+  linhasEventos.push(`• INÍCIO DO SETUP: ${inicioSetupStr || 'Início da contagem'} — Abertura e início da contagem oficial da máquina ${gargalo.maquina || '-'}`);
 
   // Structured events from gargalo.eventos if available
   if (gargalo.eventos && Array.isArray(gargalo.eventos) && gargalo.eventos.length > 0) {
     gargalo.eventos.forEach((ev) => {
-      const hIni = ev.inicioMs ? new Date(ev.inicioMs).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }) : '';
-      const hFim = ev.fimMs ? new Date(ev.fimMs).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }) : '';
-      const dur = ev.duracaoMs ? Math.floor(ev.duracaoMs / 60000) + ' min' : '';
+      let hIni = '';
+      let hFim = '';
+      try {
+        if (ev.inicioMs && !isNaN(Number(ev.inicioMs))) {
+          hIni = new Date(Number(ev.inicioMs)).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+        }
+        if (ev.fimMs && !isNaN(Number(ev.fimMs))) {
+          hFim = new Date(Number(ev.fimMs)).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+        }
+      } catch {
+        // fallback
+      }
+      const dur = ev.duracaoMs ? Math.floor(Number(ev.duracaoMs) / 60000) + ' min' : '';
 
       if (ev.tipo === 'cafe') {
-        linhasEventos.push(`• INTERVALO DE CAFÉ: Início: ${hIni} | Fim: ${hFim || '15 min'} | Duração: 00:15:00 (-15 min descontados)`);
+        linhasEventos.push(`• INTERVALO DE CAFÉ: Início: ${hIni || '-'} | Fim: ${hFim || '15 min'} | Duração: 00:15:00 (-15 min descontados)`);
       } else if (ev.tipo === 'almoco') {
-        linhasEventos.push(`• INTERVALO DE ALMOÇO: Início: ${hIni} | Fim: ${hFim || '1h30'} | Duração: 01:30:00 (-1h30 min descontados)`);
+        linhasEventos.push(`• INTERVALO DE ALMOÇO: Início: ${hIni || '-'} | Fim: ${hFim || '1h30'} | Duração: 01:30:00 (-1h30 min descontados)`);
       } else {
-        linhasEventos.push(`• PARADA OPERACIONAL: Início: ${hIni} | Fim: ${hFim || 'Retomada'} | Duração: ${dur || 'Registrada'} — Motivo: ${ev.motivo || 'Sem motivo informado'}`);
+        linhasEventos.push(`• PARADA OPERACIONAL: Início: ${hIni || '-'} | Fim: ${hFim || 'Retomada'} | Duração: ${dur || 'Registrada'} — Motivo: ${ev.motivo || 'Sem motivo informado'}`);
       }
     });
   } else {

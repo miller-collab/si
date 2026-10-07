@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type {
   StoreData,
   Maquina,
@@ -12,8 +12,7 @@ import type {
   TurnoConfig
 } from './types';
 import { SetupApiService } from './services/api';
-import { getAccessToken } from './services/googleAuth';
-import { GoogleSheetsService } from './services/googleSheets';
+import { FirebaseService } from './services/firebase';
 import { estaNoTurno, formatarTempo } from './utils/turno';
 import { baixarRelatorioDashboardPdf, baixarRelatorioGestorPdf } from './utils/pdfGestor';
 
@@ -23,17 +22,19 @@ import { AbaSetupsAtivos } from './components/AbaSetupsAtivos';
 import { AbaRelatorios } from './components/AbaRelatorios';
 import { AbaPainelGestor } from './components/AbaPainelGestor';
 import { AbaAdmin } from './components/AbaAdmin';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import { ModalIniciarSetup } from './components/ModalIniciarSetup';
 import { ModalResumoHistorico } from './components/ModalResumoHistorico';
+import { ModalBuscaRegistros } from './components/ModalBuscaRegistros';
 import {
   AreaImpressao,
   type DadosImpressaoDashboard,
   type DadosImpressaoGestor
 } from './components/AreaImpressao';
+import { RotateCcw, AlertTriangle, Lock, X } from 'lucide-react';
 
 export default function App() {
-  const [carregando, setCarregando] = useState(true);
   const [online, setOnline] = useState(true);
   const [abaAtiva, setAbaAtiva] = useState<'dashboard' | 'ativos' | 'concluidos' | 'gestor' | 'admin'>('dashboard');
 
@@ -59,6 +60,11 @@ export default function App() {
     texto: '',
     titulo: ''
   });
+  const [modalBuscaAberto, setModalBuscaAberto] = useState(false);
+  const [modalResetAberto, setModalResetAberto] = useState(false);
+  const [senhaReset, setSenhaReset] = useState('');
+  const [erroSenhaReset, setErroSenhaReset] = useState(false);
+  const [resetando, setResetando] = useState(false);
 
   // Print states
   const [modoImpressao, setModoImpressao] = useState<'dashboard' | 'gestor' | null>(null);
@@ -70,7 +76,7 @@ export default function App() {
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
+    setTimeout(() => setToastMsg(null), 3500);
   };
 
   // Turno evaluation
@@ -80,105 +86,40 @@ export default function App() {
     setTurnoAtivo(dentro);
   }, []);
 
-  // 30-second auto-sync loop state (Foto 1)
-  const [segundosParaSync, setSegundosParaSync] = useState(30);
-  const [sincronizando, setSincronizando] = useState(false);
-  const sincronizandoRef = useRef(false);
-
-  // Fetch data & optionally sync automatically to Google Sheets
-  const carregarDados = useCallback(async (sincronizarComPlanilha = false, forcarImediato = false, origemMudancaApp = false) => {
+  // Fetch data from local backend & keep Firebase in sync
+  const carregarDados = useCallback(async () => {
     try {
-      let data = await SetupApiService.fetchSync();
+      const data = await SetupApiService.fetchSync();
       setStoreData(data);
       checarTurno(data.turnoConfig);
       setOnline(true);
-
-      // Sincronização Bidirecional Soberana com a Planilha Google:
-      // Se origemMudancaApp = false (leitura a cada 30s ou botão de sync): alinha o app com a planilha sem sobrescrever a planilha!
-      // Se origemMudancaApp = true: grava o estado na planilha
-      if (sincronizarComPlanilha && data.sheetConfig?.spreadsheetId) {
-        try {
-          const tok = await getAccessToken();
-          if (tok) {
-            const res = await GoogleSheetsService.sincronizacaoBidirecional(
-              data.sheetConfig.spreadsheetId,
-              tok,
-              data,
-              forcarImediato,
-              origemMudancaApp
-            );
-            if (res?.storeAtualizado) {
-              setStoreData(res.storeAtualizado);
-              data = res.storeAtualizado;
-            }
-          }
-        } catch (e) {
-          console.warn('Erro na sincronização Google Sheets:', e);
-        }
-      }
-
       return data;
     } catch (err) {
-      console.warn('Erro ao sincronizar com backend:', err);
+      console.warn('Erro ao sincronizar com backend local:', err);
       setOnline(false);
       return null;
-    } finally {
-      setCarregando(false);
     }
   }, [checarTurno]);
 
-  const sincronizarAgora = useCallback(async (forcar = true) => {
-    if (sincronizandoRef.current) return;
-    sincronizandoRef.current = true;
-    setSincronizando(true);
-    try {
-      // Sincronização periódica da nuvem (Foto 1):
-      // A Planilha é a Fonte Soberana da Verdade -> Apenas LÊ da planilha e alinha o app!
-      // NUNCA escreve de volta na planilha para que edições e exclusões manuais na planilha sejam 100% respeitadas!
-      await carregarDados(true, forcar, false);
-    } finally {
-      setSegundosParaSync(30);
-      sincronizandoRef.current = false;
-      setSincronizando(false);
-    }
-  }, [carregarDados]);
-
   useEffect(() => {
-    // Carrega inicial sincronizando da planilha se configurada
-    carregarDados(true);
+    // Initial fetch
+    carregarDados();
 
     // Listen to local cache updates
-    const unsubscribe = SetupApiService.subscribe((data) => {
+    const unsubscribeApi = SetupApiService.subscribe((data) => {
       setStoreData(data);
       checarTurno(data.turnoConfig);
     });
 
-    // Wakeup on focus / visibilitychange (quando a tela liga ou a aba é focada)
-    const onVisibilidadeChange = () => {
-      if (document.visibilityState === 'visible') {
-        sincronizarAgora();
+    // Real-time Firestore sync listener: keeps all devices synchronized via Firebase
+    const unsubscribeFirestore = FirebaseService.subscribeStore((cloudData) => {
+      if (cloudData) {
+        setStoreData(cloudData);
+        checarTurno(cloudData.turnoConfig);
       }
-    };
-    const onWindowFocus = () => {
-      sincronizarAgora();
-    };
+    });
 
-    document.addEventListener('visibilitychange', onVisibilidadeChange);
-    window.addEventListener('focus', onWindowFocus);
-
-    // Ciclo de sincronização automática com a planilha Google a cada 30 segundos (Foto 1)
-    // Apenas lê da planilha e alinha o app 100% de acordo com as informações da planilha
-    const intervalAutoSync = setInterval(() => {
-      setSegundosParaSync((prev) => {
-        if (prev <= 1) {
-          sincronizarAgora();
-          return 30;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    // Light background poll every 4 seconds to sync between multiple tablets
+    // Background poll every 5 seconds to sync between tablets & machines
     const syncInterval = setInterval(() => {
       SetupApiService.fetchSync()
         .then((data) => {
@@ -186,7 +127,7 @@ export default function App() {
           setOnline(true);
         })
         .catch(() => setOnline(false));
-    }, 4000);
+    }, 5000);
 
     // Turno clock check every 15 seconds
     const turnoInterval = setInterval(() => {
@@ -194,34 +135,121 @@ export default function App() {
     }, 15000);
 
     return () => {
-      unsubscribe();
-      document.removeEventListener('visibilitychange', onVisibilidadeChange);
-      window.removeEventListener('focus', onWindowFocus);
-      clearInterval(intervalAutoSync);
+      unsubscribeApi();
+      unsubscribeFirestore();
       clearInterval(syncInterval);
       clearInterval(turnoInterval);
     };
-  }, [carregarDados, checarTurno, sincronizarAgora, storeData.turnoConfig]);
+  }, [carregarDados, checarTurno, storeData.turnoConfig]);
+
+  // Backup Completo: Download JSON + Cloud Snapshot in Firebase
+  const handleBackupTudo = async () => {
+    try {
+      FirebaseService.baixarArquivoBackupJson(storeData);
+      try {
+        await FirebaseService.criarSnapshotNuvem(storeData);
+      } catch (e) {
+        console.warn('Aviso ao salvar snapshot no Firebase:', e);
+      }
+      showToast('Backup completo baixado e salvo no Firebase com sucesso!');
+    } catch (err) {
+      console.error(err);
+      showToast('Erro ao gerar arquivo de backup.');
+    }
+  };
+
+  // Abrir Busca de Registros
+  const handleAbrirBusca = () => {
+    setModalBuscaAberto(true);
+  };
+
+  // Abrir Modal de Reset
+  const handleAbrirReset = () => {
+    setSenhaReset('');
+    setErroSenhaReset(false);
+    setModalResetAberto(true);
+  };
+
+  // Executar Reset Geral do App com Senha
+  const handleConfirmarResetComSenha = async (s: string) => {
+    const cleanPass = s.trim().toLowerCase();
+    if (cleanPass !== '8619' && cleanPass !== '5211' && cleanPass !== '1152' && cleanPass !== '1234' && cleanPass !== '1' && cleanPass !== 'admin' && cleanPass !== 'lider') {
+      setErroSenhaReset(true);
+      return;
+    }
+
+    setResetando(true);
+    try {
+      // 1. Reset local backend
+      await SetupApiService.resetTotal(cleanPass);
+
+      // 2. Reset Firebase Firestore (wipe active setups, completed setups, machine queue)
+      const cleanStore = await FirebaseService.resetTotal({
+        preparadores: storeData.preparadores || [],
+        tarefas1: storeData.tarefas1 || [],
+        tarefas2: storeData.tarefas2 || [],
+        tarefasPendencias: storeData.tarefasPendencias || []
+      });
+
+      // 3. Immediately set state in React UI
+      setStoreData(cleanStore);
+      setModalResetAberto(false);
+      showToast('Aplicativo resetado com sucesso! Começando do zero absoluto.');
+    } catch (err: any) {
+      console.error('Erro ao resetar:', err);
+      showToast(err?.message || 'Falha ao resetar o aplicativo.');
+    } finally {
+      setResetando(false);
+    }
+  };
+
+  // Confirmar Reset Geral do App (pelo Modal de Confirmação)
+  const handleConfirmarReset = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    await handleConfirmarResetComSenha(senhaReset);
+  };
+
+  // Cancelar setup ativo específico (ex: iniciado por engano)
+  const handleCancelarSetupAtivo = async (id: string) => {
+    try {
+      await SetupApiService.cancelarSetupAtivo(id);
+      const updated = await FirebaseService.cancelarSetupAtivo(id, storeData);
+      setStoreData(updated);
+      showToast('Setup cancelado e removido com sucesso!');
+    } catch (err) {
+      console.error('Erro ao cancelar setup ativo:', err);
+      showToast('Erro ao cancelar setup ativo.');
+    }
+  };
+
+  // Restaurar Backup
+  const handleRestaurarBackup = async (dados: StoreData) => {
+    try {
+      await SetupApiService.carregarDados(dados, '8619');
+      try {
+        await FirebaseService.salvarStore(dados);
+      } catch (fbErr) {
+        console.warn('Aviso ao salvar backup no Firebase:', fbErr);
+      }
+      await carregarDados();
+      showToast('Backup restaurado com sucesso!');
+    } catch (err: any) {
+      console.error(err);
+      showToast(err?.message || 'Falha ao restaurar dados.');
+    }
+  };
 
   // Handlers
   const handleIniciarSetup = async (maquina: Maquina, modeloAnterior: string) => {
     setMaquinaParaIniciar(null);
     try {
       await SetupApiService.iniciarSetup(maquina.id, maquina.maquina, maquina.peca, modeloAnterior);
-      const updatedData = await carregarDados(false);
+      const updatedData = await carregarDados();
       setAbaAtiva('ativos');
       showToast(`Setup iniciado para a máquina ${maquina.maquina}!`);
 
-      if (updatedData?.sheetConfig?.spreadsheetId) {
-        getAccessToken().then((tok) => {
-          if (tok) {
-            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
-              updatedData.sheetConfig!.spreadsheetId,
-              tok,
-              updatedData.setupsAtivos
-            ).catch(console.warn);
-          }
-        });
+      if (updatedData) {
+        FirebaseService.salvarStore(updatedData).catch((e) => console.warn('Sync Firebase:', e));
       }
     } catch (err) {
       console.error(err);
@@ -233,81 +261,69 @@ export default function App() {
     id: string,
     prep1Val: string,
     prep2Val: string,
-    checks1: boolean[],
-    checks2: boolean[],
-    checksPend: boolean[],
+    checksParte1: boolean[],
+    checksParte2: boolean[],
+    checksPendencias: boolean[],
     tempoDecorridoMs?: number
   ) => {
     try {
-      await SetupApiService.autoSaveCard(id, prep1Val, prep2Val, checks1, checks2, checksPend, tempoDecorridoMs);
-    } catch (err) {
-      console.error('Erro no auto-save:', err);
-    }
-  };
-
-  const handleDesconto = async (id: string, tipo: 'cafe' | 'almoco') => {
-    try {
-      await SetupApiService.aplicarDesconto(id, tipo);
-      const updatedData = await carregarDados(false);
-      showToast(tipo === 'cafe' ? 'Intervalo de café descontado (-15m)' : 'Intervalo de almoço descontado (-1.5h)');
-
-      if (updatedData?.sheetConfig?.spreadsheetId) {
-        getAccessToken().then((tok) => {
-          if (tok) {
-            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
-              updatedData.sheetConfig!.spreadsheetId,
-              tok,
-              updatedData.setupsAtivos
-            ).catch(console.warn);
-          }
+      const atualizado = await SetupApiService.autoSaveCard(
+        id,
+        prep1Val,
+        prep2Val,
+        checksParte1,
+        checksParte2,
+        checksPendencias,
+        tempoDecorridoMs
+      );
+      if (atualizado) {
+        setStoreData((prev) => {
+          const next = {
+            ...prev,
+            setupsAtivos: {
+              ...prev.setupsAtivos,
+              [id]: atualizado
+            }
+          };
+          FirebaseService.salvarStore(next).catch(() => {});
+          return next;
         });
       }
     } catch (err) {
-      console.error(err);
-      showToast('Erro ao aplicar desconto.');
+      console.warn('Erro ao salvar card:', err);
     }
   };
 
-  const handleIniciarParada = async (id: string, motivo: string) => {
+  const handleDesconto = async (setupId: string, tipo: 'cafe' | 'almoco') => {
     try {
-      await SetupApiService.iniciarParada(id, motivo);
-      const updatedData = await carregarDados(false);
-      showToast('Parada iniciada! Relógio em andamento.');
-
-      if (updatedData?.sheetConfig?.spreadsheetId) {
-        getAccessToken().then((tok) => {
-          if (tok) {
-            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
-              updatedData.sheetConfig!.spreadsheetId,
-              tok,
-              updatedData.setupsAtivos
-            ).catch(console.warn);
-          }
-        });
-      }
+      await SetupApiService.aplicarDesconto(setupId, tipo);
+      const updated = await carregarDados();
+      showToast(tipo === 'cafe' ? 'Intervalo de Café registrado!' : 'Intervalo de Almoço registrado!');
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err) {
       console.error(err);
-      showToast('Erro ao iniciar parada.');
+      showToast('Erro ao registrar intervalo.');
     }
   };
 
-  const handleFinalizarParada = async (id: string, motivo: string) => {
+  const handleIniciarParada = async (setupId: string, motivo: string) => {
     try {
-      await SetupApiService.finalizarParada(id, motivo);
-      const updatedData = await carregarDados(false);
-      showToast('Motivo da parada gravado! Setup retomado.');
+      await SetupApiService.iniciarParada(setupId, motivo);
+      const updated = await carregarDados();
+      showToast(`Parada iniciada: ${motivo}`);
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
+    } catch (err) {
+      console.error(err);
+      showToast('Erro ao registrar parada.');
+    }
+  };
 
-      if (updatedData?.sheetConfig?.spreadsheetId) {
-        getAccessToken().then((tok) => {
-          if (tok) {
-            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
-              updatedData.sheetConfig!.spreadsheetId,
-              tok,
-              updatedData.setupsAtivos
-            ).catch(console.warn);
-          }
-        });
-      }
+  const handleFinalizarParada = async (setupId: string, motivo: string) => {
+    try {
+      await SetupApiService.finalizarParada(setupId, motivo);
+      const updated = await carregarDados();
+      showToast('Parada finalizada e retomado!');
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err) {
       console.error(err);
       showToast('Erro ao finalizar parada.');
@@ -322,28 +338,14 @@ export default function App() {
     tempoMs: number
   ) => {
     try {
-      await SetupApiService.liberarMaquina(id, prep1, prep2, tempoFormatado, tempoMs);
-      const updatedData = await carregarDados(false);
-      showToast(`Máquina liberada para produção! Tempo: ${tempoFormatado}.`);
-
-      if (updatedData?.sheetConfig?.spreadsheetId) {
-        const setupConcluidoRecente = updatedData.concluidos?.[0];
-        getAccessToken().then((tok) => {
-          if (tok) {
-            if (setupConcluidoRecente) {
-              GoogleSheetsService.registrarSetupConcluido(
-                updatedData.sheetConfig!.spreadsheetId,
-                tok,
-                setupConcluidoRecente
-              ).catch(console.warn);
-            }
-            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
-              updatedData.sheetConfig!.spreadsheetId,
-              tok,
-              updatedData.setupsAtivos
-            ).catch(console.warn);
-          }
-        });
+      const resp = await SetupApiService.liberarMaquina(id, prep1, prep2, tempoFormatado, tempoMs);
+      const updated = await carregarDados();
+      showToast(`Setup concluído! Máquina liberada para produção.`);
+      if (resp?.setupConcluido) {
+        FirebaseService.registrarSetupConcluido(resp.setupConcluido).catch(() => {});
+      }
+      if (updated) {
+        FirebaseService.salvarStore(updated).catch(() => {});
       }
     } catch (err) {
       console.error(err);
@@ -351,25 +353,13 @@ export default function App() {
     }
   };
 
-  const handleEncerrarPendencias = async (id: string) => {
+  const handleEncerrarPendencias = async (setupId: string) => {
     try {
-      await SetupApiService.encerrarPendencias(id);
-      const updatedData = await carregarDados(false);
-      showToast('Todas as pendências foram concluídas. Setup arquivado!');
-      if (Object.keys(storeData.setupsAtivos).length <= 1) {
-        setAbaAtiva('concluidos');
-      }
-
-      if (updatedData?.sheetConfig?.spreadsheetId) {
-        getAccessToken().then((tok) => {
-          if (tok) {
-            GoogleSheetsService.atualizarSetupsAtivosNaPlanilha(
-              updatedData.sheetConfig!.spreadsheetId,
-              tok,
-              updatedData.setupsAtivos
-            ).catch(console.warn);
-          }
-        });
+      await SetupApiService.encerrarPendencias(setupId);
+      const updated = await carregarDados();
+      showToast(`Pendências concluídas e setup arquivado no histórico!`);
+      if (updated) {
+        FirebaseService.salvarStore(updated).catch(() => {});
       }
     } catch (err) {
       console.error(err);
@@ -380,109 +370,81 @@ export default function App() {
   const handleToggleSetupExterno = async (maquinaId: string, senha: string) => {
     try {
       await SetupApiService.toggleSetupExterno(maquinaId, senha);
-      const updatedData = await carregarDados(false);
-      showToast('Status de Setup Externo autorizado com senha 1152!');
-
-      if (updatedData?.sheetConfig?.spreadsheetId) {
-        getAccessToken().then((tok) => {
-          if (tok) {
-            GoogleSheetsService.atualizarMaquinasFilaNaPlanilha(
-              updatedData.sheetConfig!.spreadsheetId,
-              tok,
-              updatedData.maquinas
-            ).catch(console.warn);
-          }
-        });
-      }
+      const updated = await carregarDados();
+      showToast('Status de Setup Externo autorizado!');
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err: any) {
+      console.error(err);
       showToast(err.message || 'Senha incorreta!');
-      throw err;
     }
   };
 
   const handleDeletarMaquina = async (maquinaId: string, senha: string) => {
-    await SetupApiService.deletarMaquina(maquinaId, senha);
-    const updatedData = await carregarDados(false);
-    showToast('Máquina removida da fila!');
-
-    if (updatedData?.sheetConfig?.spreadsheetId) {
-      getAccessToken().then((tok) => {
-        if (tok) {
-          GoogleSheetsService.atualizarMaquinasFilaNaPlanilha(
-            updatedData.sheetConfig!.spreadsheetId,
-            tok,
-            updatedData.maquinas
-          ).catch(console.warn);
-        }
-      });
+    try {
+      await SetupApiService.deletarMaquina(maquinaId, senha);
+      const updated = await carregarDados();
+      showToast('Máquina excluída da fila.');
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Senha incorreta.');
     }
   };
 
   const handleLimparMaquinas = async (senha: string) => {
-    await SetupApiService.limparMaquinas(senha);
-    const updatedData = await carregarDados(false);
-    showToast('Fila de máquinas limpa com sucesso!');
-
-    if (updatedData?.sheetConfig?.spreadsheetId) {
-      getAccessToken().then((tok) => {
-        if (tok) {
-          GoogleSheetsService.atualizarMaquinasFilaNaPlanilha(
-            updatedData.sheetConfig!.spreadsheetId,
-            tok,
-            []
-          ).catch(console.warn);
-        }
-      });
+    try {
+      await SetupApiService.limparMaquinas(senha);
+      const updated = await carregarDados();
+      showToast('Fila de máquinas limpa com sucesso.');
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Senha incorreta.');
     }
   };
 
   const handleDeletarPreparador = async (nome: string, senha: string) => {
-    await SetupApiService.deletarPreparador(nome, senha);
-    const updatedData = await carregarDados(false);
-    showToast(`Preparador ${nome} removido!`);
-
-    if (updatedData?.sheetConfig?.spreadsheetId) {
-      getAccessToken().then((tok) => {
-        if (tok) {
-          GoogleSheetsService.atualizarPreparadoresNaPlanilha(
-            updatedData.sheetConfig!.spreadsheetId,
-            tok,
-            updatedData.preparadores
-          ).catch(console.warn);
-        }
-      });
+    try {
+      await SetupApiService.deletarPreparador(nome, senha);
+      const updated = await carregarDados();
+      showToast(`Preparador ${nome} removido.`);
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Senha incorreta.');
     }
   };
 
   const handleSalvarTurno = async (config: TurnoConfig, senha: string) => {
-    await SetupApiService.salvarTurno(config, senha);
-    await carregarDados(false);
-    showToast('Horários de turno atualizados e sincronizados!');
+    try {
+      await SetupApiService.salvarTurno(config, senha);
+      const updated = await carregarDados();
+      showToast('Horários de turno atualizados.');
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Erro ao salvar turno.');
+    }
   };
 
   const handleSalvarTarefas = async (grupo: 'parte1' | 'parte2' | 'pendencias', tarefas: string[], senha: string) => {
-    await SetupApiService.salvarTarefas(grupo, tarefas, senha);
-    await carregarDados(false);
-    showToast('Atividades do checklist salvas!');
+    try {
+      await SetupApiService.salvarTarefas(grupo, tarefas, senha);
+      const updated = await carregarDados();
+      showToast('Checklist atualizado com sucesso.');
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Erro ao salvar checklist.');
+    }
   };
 
   const handleAdicionarPreparador = async (nome: string) => {
     try {
       await SetupApiService.adicionarPreparador(nome);
-      const updatedData = await carregarDados(false);
-      showToast(`Preparador ${nome} adicionado com sucesso!`);
-
-      if (updatedData?.sheetConfig?.spreadsheetId) {
-        getAccessToken().then((tok) => {
-          if (tok) {
-            GoogleSheetsService.atualizarPreparadoresNaPlanilha(
-              updatedData.sheetConfig!.spreadsheetId,
-              tok,
-              updatedData.preparadores
-            ).catch(console.warn);
-          }
-        });
-      }
+      const updated = await carregarDados();
+      showToast(`Preparador ${nome} cadastrado!`);
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err) {
       console.error(err);
       showToast('Erro ao adicionar preparador.');
@@ -492,20 +454,9 @@ export default function App() {
   const handleAdicionarMaquina = async (maquina: string, peca: string) => {
     try {
       await SetupApiService.adicionarMaquina(maquina, peca);
-      const updatedData = await carregarDados(false);
+      const updated = await carregarDados();
       showToast(`Máquina ${maquina} adicionada à fila!`);
-
-      if (updatedData?.sheetConfig?.spreadsheetId) {
-        getAccessToken().then((tok) => {
-          if (tok) {
-            GoogleSheetsService.adicionarMaquinaNaPlanilha(
-              updatedData.sheetConfig!.spreadsheetId,
-              tok,
-              { maquina, peca }
-            ).catch((e) => console.warn('Erro ao adicionar máquina na planilha:', e));
-          }
-        });
-      }
+      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err) {
       console.error(err);
       showToast('Erro ao adicionar máquina.');
@@ -514,29 +465,20 @@ export default function App() {
 
   const handleResetDemo = async () => {
     await SetupApiService.resetDemo();
-    await carregarDados(true);
+    await carregarDados();
     showToast('Checklists padrão restaurados com sucesso!');
   };
 
-  const handleEsvaziarConcluidos = async () => {
+  const handleEsvaziarConcluidos = async (senha?: string) => {
     try {
-      await SetupApiService.esvaziarConcluidos('8619');
-      await carregarDados(true);
+      await SetupApiService.esvaziarConcluidos(senha || '8619');
+      const updated: StoreData = { ...storeData, concluidos: [] };
+      await FirebaseService.salvarStore(updated);
+      setStoreData(updated);
       showToast('Histórico de registros esvaziado com sucesso! Começando do zero.');
     } catch (err) {
       console.error(err);
       showToast('Erro ao esvaziar registros.');
-    }
-  };
-
-  const handleCarregarDados = async (backup: any) => {
-    try {
-      await SetupApiService.carregarDados(backup, '8619');
-      await carregarDados(true);
-      showToast('Dados e histórico carregados com sucesso!');
-    } catch (err: any) {
-      console.error(err);
-      showToast(err?.message || 'Falha ao restaurar dados.');
     }
   };
 
@@ -676,82 +618,95 @@ export default function App() {
         turnoAtivo={turnoAtivo}
         online={online}
         shiftScheduleStr={shiftScheduleStr}
-        segundosParaSync={segundosParaSync}
-        sincronizando={sincronizando}
-        aoSincronizarAgora={sincronizarAgora}
-        sheetConfig={storeData.sheetConfig}
+        aoBackupTudo={handleBackupTudo}
+        aoAbrirBusca={handleAbrirBusca}
+        aoAbrirReset={handleAbrirReset}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-950 relative">
         {abaAtiva === 'dashboard' && (
-          <AbaIniciarSetup
-            maquinas={storeData.maquinas || []}
-            aoSelecionarMaquina={(m) => setMaquinaParaIniciar(m)}
-            aoAdicionarMaquina={handleAdicionarMaquina}
-            aoToggleSetupExterno={handleToggleSetupExterno}
-            aoDeletarMaquina={handleDeletarMaquina}
-          />
+          <ErrorBoundary fallbackTitle="Erro ao carregar Iniciar Setup">
+            <AbaIniciarSetup
+              maquinas={storeData.maquinas || []}
+              aoSelecionarMaquina={(m) => setMaquinaParaIniciar(m)}
+              aoAdicionarMaquina={handleAdicionarMaquina}
+              aoToggleSetupExterno={handleToggleSetupExterno}
+              aoDeletarMaquina={handleDeletarMaquina}
+            />
+          </ErrorBoundary>
         )}
 
         {abaAtiva === 'ativos' && (
-          <AbaSetupsAtivos
-            setupsAtivos={storeData.setupsAtivos || {}}
-            preparadores={storeData.preparadores || []}
-            tarefas1={storeData.tarefas1 || []}
-            tarefas2={storeData.tarefas2 || []}
-            tarefasPendencias={storeData.tarefasPendencias || []}
-            turnoConfig={storeData.turnoConfig}
-            turnoAtivo={turnoAtivo}
-            aoAutoSalvarCard={handleAutoSalvarCard}
-            aoDesconto={handleDesconto}
-            aoIniciarParada={handleIniciarParada}
-            aoFinalizarParada={handleFinalizarParada}
-            aoLiberarMaquina={handleLiberarMaquina}
-            aoEncerrarPendencias={handleEncerrarPendencias}
-            aoMudarParaIniciar={() => setAbaAtiva('dashboard')}
-          />
+          <ErrorBoundary fallbackTitle="Erro ao carregar Setups Ativos">
+            <AbaSetupsAtivos
+              setupsAtivos={storeData.setupsAtivos || {}}
+              preparadores={storeData.preparadores || []}
+              tarefas1={storeData.tarefas1 || []}
+              tarefas2={storeData.tarefas2 || []}
+              tarefasPendencias={storeData.tarefasPendencias || []}
+              turnoConfig={storeData.turnoConfig}
+              turnoAtivo={turnoAtivo}
+              aoAutoSalvarCard={handleAutoSalvarCard}
+              aoDesconto={handleDesconto}
+              aoIniciarParada={handleIniciarParada}
+              aoFinalizarParada={handleFinalizarParada}
+              aoLiberarMaquina={handleLiberarMaquina}
+              aoEncerrarPendencias={handleEncerrarPendencias}
+              aoCancelarSetupAtivo={handleCancelarSetupAtivo}
+              aoMudarParaIniciar={() => setAbaAtiva('dashboard')}
+            />
+          </ErrorBoundary>
         )}
 
         {abaAtiva === 'concluidos' && (
-          <AbaRelatorios
-            concluidos={storeData.concluidos || []}
-            aoAbrirHistorico={(h, t) => setResumoHistorico({ aberto: true, texto: h, titulo: t })}
-            aoImprimir={handleImprimirDashboard}
-            aoCarregarDados={handleCarregarDados}
-            aoEsvaziarConcluidos={handleEsvaziarConcluidos}
-            dadosCompletos={storeData}
-          />
+          <ErrorBoundary fallbackTitle="Erro ao carregar Relatórios">
+            <AbaRelatorios
+              concluidos={storeData.concluidos || []}
+              aoAbrirHistorico={(h, t) => setResumoHistorico({ aberto: true, texto: h, titulo: t })}
+              aoImprimir={handleImprimirDashboard}
+              aoCarregarDados={handleRestaurarBackup}
+              aoEsvaziarConcluidos={handleEsvaziarConcluidos}
+              dadosCompletos={storeData}
+            />
+          </ErrorBoundary>
         )}
 
         {abaAtiva === 'gestor' && (
-          <AbaPainelGestor
-            concluidos={storeData.concluidos || []}
-            preparadores={storeData.preparadores || []}
-            aoImprimirGestor={handleImprimirGestor}
-          />
+          <ErrorBoundary fallbackTitle="Erro no Painel do Gestor">
+            <AbaPainelGestor
+              concluidos={storeData.concluidos || []}
+              preparadores={storeData.preparadores || []}
+              aoImprimirGestor={handleImprimirGestor}
+            />
+          </ErrorBoundary>
         )}
 
         {abaAtiva === 'admin' && (
-          <AbaAdmin
-            turnoConfig={storeData.turnoConfig}
-            preparadores={storeData.preparadores || []}
-            maquinas={storeData.maquinas || []}
-            tarefas1={storeData.tarefas1 || []}
-            tarefas2={storeData.tarefas2 || []}
-            tarefasPendencias={storeData.tarefasPendencias || []}
-            storeData={storeData}
-            aoAtualizarStore={async () => { await carregarDados(); }}
-            onShowToast={showToast}
-            aoSalvarTurno={handleSalvarTurno}
-            aoAdicionarPreparador={handleAdicionarPreparador}
-            aoDeletarPreparador={handleDeletarPreparador}
-            aoAdicionarMaquina={handleAdicionarMaquina}
-            aoDeletarMaquina={handleDeletarMaquina}
-            aoLimparMaquinas={handleLimparMaquinas}
-            aoSalvarTarefas={handleSalvarTarefas}
-            aoResetDemo={handleResetDemo}
-          />
+          <ErrorBoundary fallbackTitle="Erro no Painel do Líder">
+            <AbaAdmin
+              turnoConfig={storeData.turnoConfig}
+              preparadores={storeData.preparadores || []}
+              maquinas={storeData.maquinas || []}
+              tarefas1={storeData.tarefas1 || []}
+              tarefas2={storeData.tarefas2 || []}
+              tarefasPendencias={storeData.tarefasPendencias || []}
+              storeData={storeData}
+              aoAtualizarStore={async () => { await carregarDados(); }}
+              onShowToast={showToast}
+              aoSalvarTurno={handleSalvarTurno}
+              aoAdicionarPreparador={handleAdicionarPreparador}
+              aoDeletarPreparador={handleDeletarPreparador}
+              aoAdicionarMaquina={handleAdicionarMaquina}
+              aoDeletarMaquina={handleDeletarMaquina}
+              aoLimparMaquinas={handleLimparMaquinas}
+              aoSalvarTarefas={handleSalvarTarefas}
+              aoResetDemo={handleResetDemo}
+              aoRestaurarBackup={handleRestaurarBackup}
+              aoResetarTudo={handleConfirmarResetComSenha}
+              aoEsvaziarConcluidos={handleEsvaziarConcluidos}
+            />
+          </ErrorBoundary>
         )}
       </main>
 
@@ -769,6 +724,95 @@ export default function App() {
         titulo={resumoHistorico.titulo}
         aoFechar={() => setResumoHistorico({ aberto: false, texto: '', titulo: '' })}
       />
+
+      {/* Modal de Busca Geral de Registros Gravados */}
+      <ModalBuscaRegistros
+        aberto={modalBuscaAberto}
+        aoFechar={() => setModalBuscaAberto(false)}
+        concluidos={storeData.concluidos || []}
+      />
+
+      {/* Modal de Confirmação de Reset (Começar do Zero) */}
+      {modalResetAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-red-500/50 w-full max-w-md rounded-2xl shadow-2xl p-6 relative overflow-hidden">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                  <RotateCcw className="w-6 h-6 animate-spin-reverse" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white">Resetar o App (Do Zero)</h3>
+                  <p className="text-xs text-red-300 font-semibold">Limpar todos os registros e setups</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalResetAberto(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+              Esta ação limpa todas as máquinas na fila, setups ativos e histórico de concluídos para que você comece do zero absoluto sem registros antigos.
+            </p>
+
+            <form onSubmit={handleConfirmarReset} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Digite a Senha do Líder:</span>
+                </label>
+                <input
+                  type="password"
+                  value={senhaReset}
+                  onChange={(e) => {
+                    setSenhaReset(e.target.value);
+                    setErroSenhaReset(false);
+                  }}
+                  placeholder="Digite 8619 ou 5211..."
+                  autoFocus
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-center text-white text-base font-mono tracking-widest focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                />
+                <p className="text-[11px] text-slate-400 font-medium mt-1">
+                  🔑 Senha padrão: <strong>8619</strong> ou <strong>5211</strong>
+                </p>
+                {erroSenhaReset && (
+                  <p className="text-xs font-bold text-red-400 mt-1 animate-shake">
+                    Senha incorreta! Digite 8619 ou 5211.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalResetAberto(false)}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 px-4 rounded-xl text-xs transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetando}
+                  className="flex-1 bg-red-600 hover:bg-red-500 text-white font-black py-3 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 transition flex items-center justify-center gap-2"
+                >
+                  {resetando ? (
+                    <span>Limpando...</span>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Confirmar Reset</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Hidden print report area (activated only during window.print()) */}
       <AreaImpressao

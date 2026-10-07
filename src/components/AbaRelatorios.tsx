@@ -338,23 +338,7 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
             <span>CSV</span>
           </button>
 
-          {/* Google Sheets Live Link */}
-          {dadosCompletos?.sheetConfig?.spreadsheetId && (
-            <a
-              href={
-                dadosCompletos.sheetConfig.spreadsheetUrl?.includes('http')
-                  ? dadosCompletos.sheetConfig.spreadsheetUrl
-                  : `https://docs.google.com/spreadsheets/d/${dadosCompletos.sheetConfig.spreadsheetId}/edit`
-              }
-              target="_blank"
-              rel="noreferrer"
-              className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-emerald-500/40 transition flex items-center gap-1.5 active:scale-95 shadow-sm"
-              title="Abrir a planilha Google sincronizada em tempo real"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Planilha Google</span>
-            </a>
-          )}
+
 
           {/* Backup JSON Button (Protegido por Senha do Gestor) */}
           <button
