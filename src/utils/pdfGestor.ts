@@ -16,20 +16,47 @@ export interface DadosRelatorioGestor {
   setupMaiorTempo: SetupConcluido | null;
 }
 
+function formatarHoraSimples(d: number | Date): string {
+  try {
+    const obj = typeof d === 'number' ? new Date(d) : d;
+    return obj.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return '';
+  }
+}
+
 /**
- * Extrai as linhas de paradas e eventos de um setup concluído exatamente como exibido na Foto 1.
+ * Extrai as linhas de paradas e eventos de um setup concluído exatamente como exibido na Foto 1,
+ * com o horário de início e fim da parada explícitos.
  */
 export function extrairLinhasParadas(c: SetupConcluido): string[] {
   if (c.eventos && Array.isArray(c.eventos) && c.eventos.length > 0) {
     const linhas: string[] = [];
     c.eventos.forEach((ev) => {
-      const ts = ev.timestamp ? `[${ev.timestamp}] ` : '';
+      let faixaTempo = '';
+      if (ev.inicioMs && ev.fimMs) {
+        const horaIni = formatarHoraSimples(ev.inicioMs);
+        const horaFim = formatarHoraSimples(ev.fimMs);
+        const durMs = ev.duracaoMs || Math.max(0, ev.fimMs - ev.inicioMs);
+        const durMin = Math.round(durMs / 60000);
+        const durStr = durMin > 0 ? `${durMin} min` : `${Math.max(1, Math.round(durMs / 1000))}s`;
+        faixaTempo = `[${horaIni} às ${horaFim}] (${durStr}) `;
+      } else if (ev.inicioMs) {
+        const horaIni = formatarHoraSimples(ev.inicioMs);
+        faixaTempo = `[Início: ${horaIni}] `;
+      } else if (ev.timestamp) {
+        faixaTempo = `[${ev.timestamp}] `;
+      }
+
       if (ev.tipo === 'cafe') {
-        linhas.push(`${ts}Intervalo de Café (-15 min)`);
+        linhas.push(`${faixaTempo}Intervalo de Café (-15 min)`);
       } else if (ev.tipo === 'almoco') {
-        linhas.push(`${ts}Almoço (-1.5h)`);
+        linhas.push(`${faixaTempo}Almoço (-1.5h)`);
       } else {
-        linhas.push(`${ts}Parada: ${ev.motivo || 'Sem motivo informado'}`);
+        linhas.push(`${faixaTempo}Parada: ${ev.motivo || 'Sem motivo informado'}`);
       }
     });
     if (linhas.length > 0) return linhas;
@@ -250,10 +277,7 @@ export function criarDocRelatorioGestor(dados: DadosRelatorioGestor): jsPDF {
   // Monta tabela de Modelos Trabalhados
   const tableBody = dados.filtrados.map((item) => {
     const paradasList = extrairLinhasParadas(item);
-    const paradasFormatadas = paradasList.map((p) => {
-      const clean = p.replace(/\[.*?\]\s*/, '').trim();
-      return `• ${clean}`;
-    }).join('\n');
+    const paradasFormatadas = paradasList.map((p) => `• ${p}`).join('\n');
 
     return [
       item.data || '-',

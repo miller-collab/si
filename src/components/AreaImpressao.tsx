@@ -80,7 +80,7 @@ export const AreaImpressao: React.FC<AreaImpressaoProps> = ({
                   <td style={{ border: '1px solid #000', padding: '4px 5px', fontSize: '10px', color: '#333' }}>
                     {c.historico && c.historico.trim() !== ''
                       ? c.historico.split('|').map((e, idx) => (
-                          <div key={idx}>• {e.trim().replace(/\[.*?\]\s*/, '')}</div>
+                          <div key={idx}>• {e.trim()}</div>
                         ))
                       : '-'}
                   </td>

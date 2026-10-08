@@ -312,7 +312,7 @@ export const PainelFirebaseBackups: React.FC<PainelFirebaseBackupsProps> = ({
             <form onSubmit={handleConfirmarReset} className="space-y-4">
               <div>
                 <label className="block text-slate-300 text-xs font-bold uppercase tracking-wider mb-2 text-left">
-                  Digite a Senha do Líder (8619 ou 5211):
+                  Digite a Senha do Líder:
                 </label>
                 <input
                   type="password"
@@ -321,13 +321,13 @@ export const PainelFirebaseBackups: React.FC<PainelFirebaseBackupsProps> = ({
                     setSenhaReset(e.target.value);
                     setErroSenhaReset(false);
                   }}
-                  placeholder="Senha do líder..."
+                  placeholder="Digite a senha..."
                   autoFocus
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-center text-white font-mono tracking-widest focus:outline-none focus:border-red-500"
                 />
                 {erroSenhaReset && (
-                  <p className="text-xs font-bold text-red-400 mt-1 text-left">
-                    Senha incorreta! Digite 8619 ou 5211.
+                  <p className="text-xs font-bold text-red-400 mt-2 text-center">
+                    Senha incorreta! Digite a senha do líder.
                   </p>
                 )}
               </div>

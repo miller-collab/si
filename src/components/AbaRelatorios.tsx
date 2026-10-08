@@ -25,7 +25,7 @@ import type { SetupConcluido, StoreData } from '../types';
 import { parseDataBR, formatarTempo } from '../utils/turno';
 import { ModalVisualizarRelatorio } from './ModalVisualizarRelatorio';
 import { ModalEditarTempoSetup } from './ModalEditarTempoSetup';
-import type { DadosRelatorioGestor } from '../utils/pdfGestor';
+import { extrairLinhasParadas, type DadosRelatorioGestor } from '../utils/pdfGestor';
 
 interface AbaRelatoriosProps {
   concluidos: SetupConcluido[];
@@ -623,7 +623,7 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
                       <button
                         onClick={() =>
                           aoAbrirHistorico(
-                            c.historico,
+                            extrairLinhasParadas(c).join(' | '),
                             `Histórico - Máq: ${c.maquina} (${c.data})`
                           )
                         }

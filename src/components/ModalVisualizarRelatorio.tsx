@@ -286,12 +286,11 @@ export const ModalVisualizarRelatorio: React.FC<ModalVisualizarRelatorioProps> =
                       <td className="border border-black p-1.5 align-top">{item.modeloAnterior || '-'}</td>
                       <td className="border border-black p-1.5 align-top font-bold">{item.peca}</td>
                       <td className="border border-black p-1.5 align-top text-[9.5px]">
-                        {paradasList.map((p, pIdx) => {
-                          const clean = p.replace(/\[.*?\]\s*/, '').trim();
-                          return (
-                            <div key={pIdx}>• {clean}</div>
-                          );
-                        })}
+                        {paradasList.map((p, pIdx) => (
+                          <div key={pIdx} className="leading-tight py-0.5">
+                            • {p}
+                          </div>
+                        ))}
                       </td>
                       <td className="border border-black p-1.5 align-top text-center font-bold font-mono">
                         <div className="flex items-center justify-center gap-1 group/item">

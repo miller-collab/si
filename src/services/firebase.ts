@@ -72,6 +72,11 @@ export class FirebaseService {
         this.lastSyncTime = now;
         this.notifyStatus();
 
+        // Evita oscilação gerada por eco imediato de gravação local
+        if (snapshot.metadata && snapshot.metadata.hasPendingWrites) {
+          return;
+        }
+
         if (snapshot.exists()) {
           const raw = snapshot.data();
           try {

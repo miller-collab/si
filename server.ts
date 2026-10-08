@@ -265,24 +265,34 @@ class StoreManager {
     const strDH = getDataHoraSP(agora);
 
     if (tipo === 'cafe') {
-      setup.deductionsMs += 15 * 60 * 1000;
-      setup.historico.push(`[${strDH}] Café (-15m)`);
+      const dur = 15 * 60 * 1000;
+      const horaIni = getHoraSP(agora);
+      const horaFim = getHoraSP(agora + dur);
+      setup.deductionsMs += dur;
+      setup.historico.push(`[${horaIni} às ${horaFim}] Café (-15 min)`);
       setup.eventos.push({
-        id: `ev_${Date.now()}`,
+        id: `ev_${agora}`,
         timestamp: strDH,
         tipo: 'cafe',
         motivo: 'Café (-15m)',
-        inicioMs: Date.now()
+        inicioMs: agora,
+        fimMs: agora + dur,
+        duracaoMs: dur
       });
     } else if (tipo === 'almoco') {
-      setup.deductionsMs += 90 * 60 * 1000;
-      setup.historico.push(`[${strDH}] Almoço (-1.5h)`);
+      const dur = 90 * 60 * 1000;
+      const horaIni = getHoraSP(agora);
+      const horaFim = getHoraSP(agora + dur);
+      setup.deductionsMs += dur;
+      setup.historico.push(`[${horaIni} às ${horaFim}] Almoço (-1.5h)`);
       setup.eventos.push({
-        id: `ev_${Date.now()}`,
+        id: `ev_${agora}`,
         timestamp: strDH,
         tipo: 'almoco',
         motivo: 'Almoço (-1.5h)',
-        inicioMs: Date.now()
+        inicioMs: agora,
+        fimMs: agora + dur,
+        duracaoMs: dur
       });
     }
 
@@ -364,6 +374,24 @@ class StoreManager {
 
     const agora = Date.now();
     const dataStr = getDataHoraCurtaSP(agora);
+
+    if (setup.paradaAtiva && setup.paradaAtual) {
+      const duracaoMs = Math.max(0, agora - setup.paradaAtual.inicioMs);
+      setup.paradaAtual.fimMs = agora;
+      setup.paradaAtual.duracaoMs = duracaoMs;
+      setup.paradaAtual.emAndamento = false;
+      const ev = setup.eventos?.find((e) => e.id === setup.paradaAtual?.id);
+      if (ev) {
+        ev.fimMs = agora;
+        ev.duracaoMs = duracaoMs;
+        ev.emAndamento = false;
+      }
+      setup.paradaAtiva = false;
+      const horaIni = getHoraSP(setup.paradaAtual.inicioMs);
+      const horaFim = getHoraSP(agora);
+      setup.historico.push(`[${horaIni} às ${horaFim}] Parada: ${setup.paradaAtual.motivo}`);
+      setup.paradaAtual = undefined;
+    }
 
     setup.setupRegistrado = true;
     setup.prep1Val = prep1;

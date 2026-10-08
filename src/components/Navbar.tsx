@@ -110,7 +110,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 ? 'bg-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/30'
                 : 'text-amber-400/90 hover:text-amber-300 hover:bg-amber-500/10'
             }`}
-            title="Painel do Gestor (Senha: 8619)"
+            title="Painel do Gestor"
           >
             <UserCheck className="w-5 h-5 shrink-0" />
             <span className="hidden md:inline">Painel do Gestor</span>
@@ -124,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 ? 'bg-slate-800 text-blue-400 border border-blue-500/30 shadow-lg'
                 : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
             }`}
-            title="Painel do Líder (Senha: 8619)"
+            title="Painel do Líder"
           >
             <Lock className="w-5 h-5 shrink-0" />
             <span className="hidden md:inline">Painel do Líder</span>

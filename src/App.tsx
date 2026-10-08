@@ -113,11 +113,15 @@ export default function App() {
     // 2. Real-time Firestore sync listener: keeps all devices synchronized via Firebase without oscillation
     const unsubscribeFirestore = FirebaseService.subscribeStore((cloudData) => {
       if (cloudData) {
-        setStoreData(cloudData);
-        checarTurno(cloudData.turnoConfig);
-        setOnline(true);
-        // Mantém o disco do servidor local 100% alinhado com o Firestore
-        SetupApiService.syncFromCloud(cloudData);
+        const curStr = JSON.stringify(storeDataRef.current || {});
+        const newStr = JSON.stringify(cloudData);
+        if (curStr !== newStr) {
+          setStoreData(cloudData);
+          checarTurno(cloudData.turnoConfig);
+          setOnline(true);
+          // Mantém o disco do servidor local 100% alinhado com o Firestore
+          SetupApiService.syncFromCloud(cloudData);
+        }
       }
     });
 
@@ -531,7 +535,7 @@ export default function App() {
     const s = String(senha || '').trim().toLowerCase();
     if (s !== '8619' && s !== '5211' && s !== '1152' && s !== '1234' && s !== '1' && s !== 'admin' && s !== 'gestor' && s !== 'lider') {
       showToast('Senha de líder incorreta para editar tempo.');
-      throw new Error('Senha incorreta! Digite 8619 ou 5211.');
+      throw new Error('Senha incorreta! Digite a senha do líder.');
     }
 
     const cleanTempo = novoTempo.trim();
@@ -862,16 +866,13 @@ export default function App() {
                     setSenhaReset(e.target.value);
                     setErroSenhaReset(false);
                   }}
-                  placeholder="Digite 8619 ou 5211..."
+                  placeholder="Digite a senha..."
                   autoFocus
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-center text-white text-base font-mono tracking-widest focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
                 />
-                <p className="text-[11px] text-slate-400 font-medium mt-1">
-                  🔑 Senha padrão: <strong>8619</strong> ou <strong>5211</strong>
-                </p>
                 {erroSenhaReset && (
-                  <p className="text-xs font-bold text-red-400 mt-1 animate-shake">
-                    Senha incorreta! Digite 8619 ou 5211.
+                  <p className="text-xs font-bold text-red-400 mt-2 text-center animate-shake">
+                    Senha incorreta! Digite a senha do líder.
                   </p>
                 )}
               </div>

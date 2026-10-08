@@ -13,11 +13,13 @@ import {
   Cog,
   BarChart,
   ArrowRight,
-  Eye
+  Eye,
+  Pencil
 } from 'lucide-react';
 import type { SetupConcluido } from '../types';
 import { parseDataBR, formatarTempo } from '../utils/turno';
 import { ModalVisualizarRelatorio } from './ModalVisualizarRelatorio';
+import { ModalEditarTempoSetup } from './ModalEditarTempoSetup';
 import { extrairLinhasParadas, type DadosRelatorioGestor } from '../utils/pdfGestor';
 
 interface AbaPainelGestorProps {
@@ -52,6 +54,14 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
   // PDF Modal State
   const [modalPdfAberto, setModalPdfAberto] = useState(false);
   const [dadosPdfModal, setDadosPdfModal] = useState<DadosRelatorioGestor | null>(null);
+
+  // Edit Time State
+  const [setupEditando, setSetupEditando] = useState<{
+    id: string;
+    maquina: string;
+    peca: string;
+    tempoAtual: string;
+  } | null>(null);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -556,7 +566,26 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
                       <span className="font-black text-red-400 uppercase tracking-wider text-[11px]">
                         #{idx + 1} Gargalo • {c.maquina}
                       </span>
-                      <span className="font-mono text-emerald-400 font-bold">{c.tempo}</span>
+                      <div className="flex items-center gap-1.5 font-mono text-emerald-400 font-bold">
+                        <span>{c.tempo}</span>
+                        {aoEditarTempo && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSetupEditando({
+                                id: c.id,
+                                maquina: c.maquina,
+                                peca: c.peca,
+                                tempoAtual: c.tempo
+                              })
+                            }
+                            className="p-1 rounded text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition"
+                            title="Editar tempo deste setup com senha do líder (Salvar na raiz)"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Detalhamento do Setup */}
@@ -678,6 +707,18 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
         dados={dadosPdfModal}
         aoFechar={() => setModalPdfAberto(false)}
         aoEditarTempo={aoEditarTempo}
+      />
+
+      {/* Modal Editar Tempo do Setup com Senha do Líder (Salva na Raiz) */}
+      <ModalEditarTempoSetup
+        aberto={!!setupEditando}
+        setup={setupEditando}
+        aoFechar={() => setSetupEditando(null)}
+        aoSalvar={async (id, novoTempo, senha) => {
+          if (aoEditarTempo) {
+            await aoEditarTempo(id, novoTempo, senha);
+          }
+        }}
       />
     </div>
   );

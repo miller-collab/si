@@ -60,7 +60,7 @@ export const ModalEditarTempoSetup: React.FC<ModalEditarTempoSetupProps> = ({
       s !== 'gestor' &&
       s !== 'lider'
     ) {
-      setErro('Senha de líder incorreta! Digite 8619 ou 5211.');
+      setErro('Senha incorreta! Digite a senha do líder.');
       return;
     }
 
@@ -158,7 +158,7 @@ export const ModalEditarTempoSetup: React.FC<ModalEditarTempoSetupProps> = ({
                 setSenha(e.target.value);
                 if (erro) setErro(null);
               }}
-              placeholder="Digite 8619 ou 5211..."
+              placeholder="Digite a senha..."
               required
               className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl p-3 text-white font-mono text-base tracking-widest focus:outline-none shadow-inner"
             />
