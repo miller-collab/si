@@ -363,6 +363,33 @@ export class SetupApiService {
     if (json.data) this.setCache(json.data);
   }
 
+  public static async editarTempoConcluido(id: string, novoTempo: string, senha: string): Promise<StoreData | null> {
+    const res = await fetch('/api/setup/editar-tempo-concluido', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, novoTempo, senha })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Falha ao editar tempo');
+    }
+    const json = await res.json();
+    if (json.data) this.setCache(json.data);
+    return json.data || null;
+  }
+
+  public static async syncFromCloud(cloudData: StoreData): Promise<void> {
+    try {
+      await fetch('/api/setup/sync-from-cloud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cloudData })
+      });
+    } catch (e) {
+      // Background non-blocking sync
+    }
+  }
+
   public static async mesclarPlanilha(
     concluidos?: SetupConcluido[],
     maquinas?: Maquina[],

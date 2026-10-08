@@ -477,6 +477,15 @@ class StoreManager {
     this.save();
   }
 
+  public editarTempoConcluido(id: string, novoTempoFormatado: string, novoTempoMs: number): boolean {
+    const item = this.data.concluidos.find(c => c.id === id);
+    if (!item) return false;
+    item.tempo = novoTempoFormatado;
+    item.tempoMs = novoTempoMs;
+    this.save();
+    return true;
+  }
+
   public carregarDadosBackup(backup: any) {
     if (!backup || typeof backup !== 'object') return;
     if (Array.isArray(backup.concluidos)) {
@@ -789,6 +798,42 @@ async function startServer() {
     }
     store.esvaziarConcluidos();
     res.json({ sucesso: true, data: store.getData() });
+  });
+
+  // Editar Tempo de Setup Concluído com Senha do Líder (Salva na raiz)
+  app.post('/api/setup/editar-tempo-concluido', (req, res) => {
+    const { id, novoTempo, senha } = req.body;
+    const s = String(senha || '').trim().toLowerCase();
+    if (s !== '8619' && s !== '5211' && s !== '1152' && s !== '1234' && s !== '1' && s !== 'admin' && s !== 'gestor' && s !== 'lider') {
+      return res.status(401).json({ error: 'Senha do líder incorreta' });
+    }
+    if (!id || !novoTempo) {
+      return res.status(400).json({ error: 'ID e novo tempo são obrigatórios' });
+    }
+
+    let ms = 0;
+    const partes = String(novoTempo).trim().split(':');
+    if (partes.length === 3) {
+      ms = (+partes[0] * 3600 + +partes[1] * 60 + +partes[2]) * 1000;
+    } else if (partes.length === 2) {
+      ms = (+partes[0] * 60 + +partes[1]) * 1000;
+    } else {
+      ms = (+partes[0] || 0) * 60 * 1000;
+    }
+
+    const sucesso = store.editarTempoConcluido(id, String(novoTempo).trim(), ms);
+    res.json({ sucesso, data: store.getData() });
+  });
+
+  // Sincronizar dados do Firestore para o disco local (impede qualquer oscilação)
+  app.post('/api/setup/sync-from-cloud', (req, res) => {
+    const { cloudData } = req.body;
+    if (cloudData && typeof cloudData === 'object') {
+      store.carregarDadosBackup(cloudData);
+      res.json({ sucesso: true, data: store.getData() });
+    } else {
+      res.status(400).json({ error: 'Dados inválidos' });
+    }
   });
 
   // Load/Restore backup

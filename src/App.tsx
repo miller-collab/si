@@ -110,35 +110,30 @@ export default function App() {
     // 1. Initial fetch from local server
     carregarDados();
 
-    // 2. Listen to local cache updates
-    const unsubscribeApi = SetupApiService.subscribe((data) => {
-      setStoreData(data);
-      checarTurno(data.turnoConfig);
-    });
-
-    // 3. Real-time Firestore sync listener: keeps all devices synchronized via Firebase
+    // 2. Real-time Firestore sync listener: keeps all devices synchronized via Firebase without oscillation
     const unsubscribeFirestore = FirebaseService.subscribeStore((cloudData) => {
       if (cloudData) {
         setStoreData(cloudData);
         checarTurno(cloudData.turnoConfig);
         setOnline(true);
+        // Mantém o disco do servidor local 100% alinhado com o Firestore
+        SetupApiService.syncFromCloud(cloudData);
       }
     });
 
-    // 4. Background poll every 10 seconds to detect network recovery
+    // 3. Network health ping every 15 seconds (does NOT overwrite cloud state)
     const syncInterval = setInterval(() => {
-      SetupApiService.fetchSync()
-        .then(() => setOnline(true))
+      fetch(`/api/setup/sync?_ping=${Date.now()}`, { cache: 'no-store' })
+        .then((r) => setOnline(r.ok))
         .catch(() => setOnline(false));
-    }, 10000);
+    }, 15000);
 
-    // 5. Turno clock check every 15 seconds
+    // 4. Turno clock check every 15 seconds
     const turnoInterval = setInterval(() => {
       checarTurno();
     }, 15000);
 
     return () => {
-      unsubscribeApi();
       unsubscribeFirestore();
       clearInterval(syncInterval);
       clearInterval(turnoInterval);
@@ -531,6 +526,50 @@ export default function App() {
     }
   };
 
+  // Editar Tempo de Setup Concluído com Senha do Líder (Salvar na Raiz)
+  const handleEditarTempoConcluido = async (id: string, novoTempo: string, senha: string) => {
+    const s = String(senha || '').trim().toLowerCase();
+    if (s !== '8619' && s !== '5211' && s !== '1152' && s !== '1234' && s !== '1' && s !== 'admin' && s !== 'gestor' && s !== 'lider') {
+      showToast('Senha de líder incorreta para editar tempo.');
+      throw new Error('Senha incorreta! Digite 8619 ou 5211.');
+    }
+
+    const cleanTempo = novoTempo.trim();
+    let ms = 0;
+    const partes = cleanTempo.split(':');
+    if (partes.length === 3) {
+      ms = (+partes[0] * 3600 + +partes[1] * 60 + +partes[2]) * 1000;
+    } else if (partes.length === 2) {
+      ms = (+partes[0] * 60 + +partes[1]) * 1000;
+    } else {
+      ms = (+partes[0] || 0) * 60 * 1000;
+    }
+
+    // 1. Atualização otimista imediata na interface
+    const updatedConcluidos = (storeData.concluidos || []).map((c) => {
+      if (c.id === id) {
+        return { ...c, tempo: cleanTempo, tempoMs: ms };
+      }
+      return c;
+    });
+    const updatedStore: StoreData = {
+      ...storeData,
+      concluidos: updatedConcluidos
+    };
+    setStoreData(updatedStore);
+
+    // 2. Gravação imediata na raiz (Firestore Cloud + Backend server)
+    try {
+      await FirebaseService.editarTempoConcluido(id, cleanTempo, storeData);
+      await SetupApiService.editarTempoConcluido(id, cleanTempo, s);
+      showToast(`Tempo atualizado para ${cleanTempo} e gravado na raiz com sucesso!`);
+    } catch (err: any) {
+      console.error('Erro ao editar tempo na raiz:', err);
+      showToast(err?.message || 'Erro ao salvar tempo na raiz.');
+      throw err;
+    }
+  };
+
   // Print Handlers
   const handleImprimirDashboard = (
     filtrados: SetupConcluido[],
@@ -717,6 +756,7 @@ export default function App() {
               aoCarregarDados={handleRestaurarBackup}
               aoEsvaziarConcluidos={handleEsvaziarConcluidos}
               dadosCompletos={storeData}
+              aoEditarTempo={handleEditarTempoConcluido}
             />
           </ErrorBoundary>
         )}
@@ -727,6 +767,7 @@ export default function App() {
               concluidos={storeData.concluidos || []}
               preparadores={storeData.preparadores || []}
               aoImprimirGestor={handleImprimirGestor}
+              aoEditarTempo={handleEditarTempoConcluido}
             />
           </ErrorBoundary>
         )}

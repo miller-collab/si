@@ -148,6 +148,53 @@ export class FirebaseService {
   }
 
   /**
+   * Edita o tempo de um setup concluído diretamente na raiz do Firestore
+   */
+  public static async editarTempoConcluido(
+    setupId: string,
+    novoTempo: string,
+    currentStore: StoreData
+  ): Promise<StoreData> {
+    const cleanTempo = novoTempo.trim();
+    let ms = 0;
+    const partes = cleanTempo.split(':');
+    if (partes.length === 3) {
+      ms = (+partes[0] * 3600 + +partes[1] * 60 + +partes[2]) * 1000;
+    } else if (partes.length === 2) {
+      ms = (+partes[0] * 60 + +partes[1]) * 1000;
+    } else {
+      ms = (+partes[0] || 0) * 60 * 1000;
+    }
+
+    const updatedConcluidos = (currentStore.concluidos || []).map((c) => {
+      if (c.id === setupId) {
+        return {
+          ...c,
+          tempo: cleanTempo,
+          tempoMs: ms
+        };
+      }
+      return c;
+    });
+
+    const updatedStore: StoreData = {
+      ...currentStore,
+      concluidos: updatedConcluidos
+    };
+
+    await this.salvarStore(updatedStore);
+
+    try {
+      const docRef = doc(db, 'setups_concluidos', setupId);
+      await setFirestoreDoc(docRef, { tempo: cleanTempo, tempoMs: ms, editadoEm: Date.now() }, { merge: true });
+    } catch (e) {
+      // Ignora se não existir documento individual
+    }
+
+    return updatedStore;
+  }
+
+  /**
    * Salva um setup concluído de forma permanente na coleção dedicada /setups_concluidos
    */
   public static async registrarSetupConcluido(setup: SetupConcluido): Promise<void> {

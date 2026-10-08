@@ -1,19 +1,29 @@
-import React, { useRef } from 'react';
-import { Download, Printer, X, Eye, FileText, CheckCircle } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Download, Printer, X, Eye, FileText, CheckCircle, Pencil } from 'lucide-react';
 import type { DadosRelatorioGestor } from '../utils/pdfGestor';
 import { baixarRelatorioGestorPdf, extrairLinhasParadas } from '../utils/pdfGestor';
+import { ModalEditarTempoSetup } from './ModalEditarTempoSetup';
 
 interface ModalVisualizarRelatorioProps {
   aberto: boolean;
   dados: DadosRelatorioGestor | null;
   aoFechar: () => void;
+  aoEditarTempo?: (id: string, novoTempo: string, senha: string) => Promise<void>;
 }
 
 export const ModalVisualizarRelatorio: React.FC<ModalVisualizarRelatorioProps> = ({
   aberto,
   dados,
-  aoFechar
+  aoFechar,
+  aoEditarTempo
 }) => {
+  const [setupEditando, setSetupEditando] = useState<{
+    id: string;
+    maquina: string;
+    peca: string;
+    tempoAtual: string;
+  } | null>(null);
+
   if (!aberto || !dados) return null;
 
   const dataLimpa = new Date().toISOString().slice(0, 10);
@@ -26,6 +36,21 @@ export const ModalVisualizarRelatorio: React.FC<ModalVisualizarRelatorioProps> =
 
   const handleImprimir = () => {
     window.print();
+  };
+
+  const handleSalvarTempoRaiz = async (id: string, novoTempo: string, senha: string) => {
+    if (aoEditarTempo) {
+      await aoEditarTempo(id, novoTempo, senha);
+      // Atualiza localmente a lista exibida na folha para refletir imediatamente
+      const item = dados.filtrados.find((f) => f.id === id);
+      if (item) {
+        item.tempo = novoTempo;
+      }
+      const gItem = dados.top3.find((g) => g.id === id);
+      if (gItem) {
+        gItem.tempo = novoTempo;
+      }
+    }
   };
 
   return (
@@ -184,12 +209,33 @@ export const ModalVisualizarRelatorio: React.FC<ModalVisualizarRelatorioProps> =
                       <div className="font-bold text-[12px] text-black mb-1">
                         #{idx + 1} - Máquina: {g.maquina}
                       </div>
-                      <div className="text-[10.5px] text-slate-800 mb-2.5 leading-snug">
-                        <strong>Data:</strong> {g.data} &nbsp;|&nbsp;{' '}
-                        <strong>Preparadores:</strong> {g.prep1} / {g.prep2} &nbsp;|&nbsp;{' '}
-                        <strong>Mod. Anterior:</strong> {g.modeloAnterior || '-'} &nbsp;|&nbsp;{' '}
-                        <strong>Peça (Atual):</strong> {g.peca} &nbsp;|&nbsp;{' '}
-                        <strong>Tempo Total:</strong> {g.tempo}
+                      <div className="text-[10.5px] text-slate-800 mb-2.5 leading-snug flex items-center justify-between flex-wrap gap-1">
+                        <div>
+                          <strong>Data:</strong> {g.data} &nbsp;|&nbsp;{' '}
+                          <strong>Preparadores:</strong> {g.prep1} / {g.prep2} &nbsp;|&nbsp;{' '}
+                          <strong>Mod. Anterior:</strong> {g.modeloAnterior || '-'} &nbsp;|&nbsp;{' '}
+                          <strong>Peça (Atual):</strong> {g.peca}
+                        </div>
+                        <div className="flex items-center gap-1 font-mono font-bold">
+                          <span>Tempo Total: <strong>{g.tempo}</strong></span>
+                          {aoEditarTempo && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSetupEditando({
+                                  id: g.id,
+                                  maquina: g.maquina,
+                                  peca: g.peca,
+                                  tempoAtual: g.tempo
+                                })
+                              }
+                              className="text-slate-500 hover:text-black p-0.5 rounded transition print:hidden"
+                              title="Editar tempo deste setup com senha do líder (Salvar na raiz)"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Gray Inner Box with chronological stoppage timeline (Foto 1) */}
@@ -248,7 +294,26 @@ export const ModalVisualizarRelatorio: React.FC<ModalVisualizarRelatorioProps> =
                         })}
                       </td>
                       <td className="border border-black p-1.5 align-top text-center font-bold font-mono">
-                        {item.tempo}
+                        <div className="flex items-center justify-center gap-1 group/item">
+                          <span>{item.tempo}</span>
+                          {aoEditarTempo && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSetupEditando({
+                                  id: item.id,
+                                  maquina: item.maquina,
+                                  peca: item.peca,
+                                  tempoAtual: item.tempo
+                                })
+                              }
+                              className="text-slate-400 hover:text-black p-0.5 rounded transition print:hidden"
+                              title="Editar tempo deste setup com senha do líder (Salvar na raiz)"
+                            >
+                              <Pencil className="w-2.5 h-2.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -313,6 +378,14 @@ export const ModalVisualizarRelatorio: React.FC<ModalVisualizarRelatorioProps> =
           </button>
         </div>
       </div>
+
+      {/* Modal para Editar Tempo e Salvar na Raiz */}
+      <ModalEditarTempoSetup
+        aberto={!!setupEditando}
+        setup={setupEditando}
+        aoFechar={() => setSetupEditando(null)}
+        aoSalvar={handleSalvarTempoRaiz}
+      />
     </div>
   );
 };

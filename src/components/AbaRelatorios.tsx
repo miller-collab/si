@@ -18,11 +18,13 @@ import {
   Lock,
   KeyRound,
   FileSpreadsheet,
-  Eye
+  Eye,
+  Pencil
 } from 'lucide-react';
 import type { SetupConcluido, StoreData } from '../types';
 import { parseDataBR, formatarTempo } from '../utils/turno';
 import { ModalVisualizarRelatorio } from './ModalVisualizarRelatorio';
+import { ModalEditarTempoSetup } from './ModalEditarTempoSetup';
 import type { DadosRelatorioGestor } from '../utils/pdfGestor';
 
 interface AbaRelatoriosProps {
@@ -32,6 +34,7 @@ interface AbaRelatoriosProps {
   aoCarregarDados?: (backup: any) => Promise<void>;
   aoEsvaziarConcluidos?: () => Promise<void>;
   dadosCompletos?: StoreData | null;
+  aoEditarTempo?: (id: string, novoTempo: string, senha: string) => Promise<void>;
 }
 
 export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
@@ -40,11 +43,18 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
   aoImprimir,
   aoCarregarDados,
   aoEsvaziarConcluidos,
-  dadosCompletos
+  dadosCompletos,
+  aoEditarTempo
 }) => {
   const [filtroMaquina, setFiltroMaquina] = useState('todas');
   const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
   const [termoBusca, setTermoBusca] = useState('');
+  const [setupEditando, setSetupEditando] = useState<{
+    id: string;
+    maquina: string;
+    peca: string;
+    tempoAtual: string;
+  } | null>(null);
 
   // Password Protection for Gestor Actions (Backup, Carregar Dados, Esvaziar)
   const [modalSenhaAberto, setModalSenhaAberto] = useState(false);
@@ -626,7 +636,26 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
                     <td className="p-3.5 text-amber-400 font-bold">{c.modeloAnterior || '-'}</td>
                     <td className="p-3.5 text-blue-300 font-bold">{c.peca}</td>
                     <td className="p-3.5 font-mono text-emerald-400 font-bold text-sm text-right">
-                      {c.tempo}
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span>{c.tempo}</span>
+                        {aoEditarTempo && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSetupEditando({
+                                id: c.id,
+                                maquina: c.maquina,
+                                peca: c.peca,
+                                tempoAtual: c.tempo
+                              })
+                            }
+                            className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition"
+                            title="Editar tempo deste setup com senha do líder (Salvar na raiz)"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -860,6 +889,19 @@ export const AbaRelatorios: React.FC<AbaRelatoriosProps> = ({
         aberto={modalVisualizarAberto}
         dados={dadosVisualizar}
         aoFechar={() => setModalVisualizarAberto(false)}
+        aoEditarTempo={aoEditarTempo}
+      />
+
+      {/* Modal para Editar Tempo Diretamente e Salvar na Raiz */}
+      <ModalEditarTempoSetup
+        aberto={!!setupEditando}
+        setup={setupEditando}
+        aoFechar={() => setSetupEditando(null)}
+        aoSalvar={async (id, novoTempo, senha) => {
+          if (aoEditarTempo) {
+            await aoEditarTempo(id, novoTempo, senha);
+          }
+        }}
       />
     </div>
   );

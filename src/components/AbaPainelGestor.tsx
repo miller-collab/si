@@ -30,12 +30,14 @@ interface AbaPainelGestorProps {
     top3: SetupConcluido[],
     top10Paradas: Array<{ descricao: string; count: number; pct: number }>
   ) => void;
+  aoEditarTempo?: (id: string, novoTempo: string, senha: string) => Promise<void>;
 }
 
 export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
   concluidos,
   preparadores,
-  aoImprimirGestor
+  aoImprimirGestor,
+  aoEditarTempo
 }) => {
   const [autenticado, setAutenticado] = useState(false);
   const [senha, setSenha] = useState('');
@@ -675,6 +677,7 @@ export const AbaPainelGestor: React.FC<AbaPainelGestorProps> = ({
         aberto={modalPdfAberto}
         dados={dadosPdfModal}
         aoFechar={() => setModalPdfAberto(false)}
+        aoEditarTempo={aoEditarTempo}
       />
     </div>
   );
