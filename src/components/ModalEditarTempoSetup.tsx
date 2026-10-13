@@ -159,6 +159,7 @@ export const ModalEditarTempoSetup: React.FC<ModalEditarTempoSetupProps> = ({
                 if (erro) setErro(null);
               }}
               placeholder="Digite a senha..."
+              autoComplete="new-password"
               required
               className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl p-3 text-white font-mono text-base tracking-widest focus:outline-none shadow-inner"
             />

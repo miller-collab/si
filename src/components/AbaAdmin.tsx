@@ -238,6 +238,7 @@ export const AbaAdmin: React.FC<AbaAdminProps> = ({
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               placeholder="Digite a senha..."
+              autoComplete="new-password"
               autoFocus
               className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-center text-white text-lg font-mono tracking-widest focus:outline-none focus:border-blue-500"
             />

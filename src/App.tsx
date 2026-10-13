@@ -127,20 +127,32 @@ export default function App() {
       }
     });
 
-    // 3. Network health ping every 15 seconds (does NOT overwrite cloud state)
+    // 3. Monitoramento em tempo real do status do Firebase Cloud
+    const unsubscribeFirebaseStatus = FirebaseService.subscribeStatus((st) => {
+      if (st.connected) {
+        setOnline(true);
+      }
+    });
+
+    // 4. Network health ping a cada 15 segundos (se backend local existir pinga, senão confere status da rede)
     const syncInterval = setInterval(() => {
-      fetch(`/api/setup/sync?_ping=${Date.now()}`, { cache: 'no-store' })
-        .then((r) => setOnline(r.ok))
-        .catch(() => setOnline(false));
+      if (SetupApiService.isServerAvailable()) {
+        fetch(`/api/setup/sync?_ping=${Date.now()}`, { cache: 'no-store' })
+          .then((r) => setOnline(r.ok))
+          .catch(() => setOnline(false));
+      } else {
+        setOnline(navigator.onLine);
+      }
     }, 15000);
 
-    // 4. Turno clock check every 15 seconds
+    // 5. Turno clock check every 15 seconds
     const turnoInterval = setInterval(() => {
       checarTurno();
     }, 15000);
 
     return () => {
       unsubscribeFirestore();
+      unsubscribeFirebaseStatus();
       clearInterval(syncInterval);
       clearInterval(turnoInterval);
     };
@@ -878,6 +890,7 @@ export default function App() {
                     setErroSenhaReset(false);
                   }}
                   placeholder="Digite a senha..."
+                  autoComplete="new-password"
                   autoFocus
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-center text-white text-base font-mono tracking-widest focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
                 />

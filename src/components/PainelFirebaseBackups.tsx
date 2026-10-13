@@ -322,6 +322,7 @@ export const PainelFirebaseBackups: React.FC<PainelFirebaseBackupsProps> = ({
                     setErroSenhaReset(false);
                   }}
                   placeholder="Digite a senha..."
+                  autoComplete="new-password"
                   autoFocus
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-center text-white font-mono tracking-widest focus:outline-none focus:border-red-500"
                 />

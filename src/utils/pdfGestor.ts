@@ -68,6 +68,10 @@ export function extrairLinhasParadas(c: SetupConcluido): string[] {
       const low = p.toLowerCase();
       if (low.includes('início do setup') || low.includes('inicio do setup') || low.includes('setup iniciado')) return false;
       if (low.includes('fim do setup') || low.includes('máquina liberada') || low.includes('maquina liberada')) return false;
+      if (low.includes('parada iniciada')) {
+        const hasFinalizada = partes.some((outro) => outro.toLowerCase().includes(' às ') && outro.toLowerCase().includes('parada'));
+        if (hasFinalizada) return false;
+      }
       return true;
     });
     if (paradas.length > 0) return paradas;

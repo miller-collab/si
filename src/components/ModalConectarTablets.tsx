@@ -28,8 +28,8 @@ export const ModalConectarTablets: React.FC<ModalConectarTabletsProps> = ({
 
   // URL oficial para compartilhamento com todos os aparelhos/tablets
   const sharedUrl = 'https://ais-pre-nqcvyd3bnkck2qksczzs5i-795025193395.us-east1.run.app';
-  const publicUrl = typeof window !== 'undefined' && window.location && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1')
-    ? window.location.href.split('#')[0].split('?')[0]
+  const publicUrl = typeof window !== 'undefined' && window.location && window.location.origin && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1')
+    ? window.location.origin
     : sharedUrl;
 
   const qrCodeDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(publicUrl)}`;
@@ -138,9 +138,9 @@ export const ModalConectarTablets: React.FC<ModalConectarTabletsProps> = ({
             <Sparkles className="w-4 h-4" /> Como funciona na fábrica:
           </div>
           <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-300/90 leading-relaxed">
-            <li><strong className="text-white">Sincronização Instantânea:</strong> Qualquer checklist marcado, máquina iniciada ou parada registrada aparece imediatamente em todos os outros tablets.</li>
-            <li><strong className="text-white">Sem necessidade de cadastro extra:</strong> Não precisa configurar Firebase ou contas externas — o sistema já roda centralizado no servidor em nuvem.</li>
-            <li><strong className="text-white">Dica para tela cheia:</strong> No tablet, toque no menu do navegador (três pontinhos) e selecione <span className="text-blue-400 font-semibold">"Adicionar à Tela de Início"</span> para abrir como um app completo.</li>
+            <li><strong className="text-white">Qual link usar nos aparelhos:</strong> No tablet ou celular, use exatamente o link do seu site (ex: <span className="text-blue-400 font-mono">https://seu-projeto.vercel.app</span>) ou aponte a câmera para o QR Code acima.</li>
+            <li><strong className="text-white">Sincronização em Tempo Real:</strong> Qualquer checklist marcado, máquina iniciada ou parada registrada aparece imediatamente em todos os outros tablets e computadores via Firebase.</li>
+            <li><strong className="text-white">Dica para tela cheia:</strong> No tablet, toque no menu do navegador (três pontinhos) e selecione <span className="text-blue-400 font-semibold">"Adicionar à Tela de Início"</span> para abrir como um app completo sem barra de endereços.</li>
           </ul>
         </div>
 

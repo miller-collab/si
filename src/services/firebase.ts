@@ -107,6 +107,36 @@ export class FirebaseService {
   }
 
   /**
+   * Obtém os dados atuais diretamente do Firestore uma única vez
+   */
+  public static async obterStore(): Promise<StoreData | null> {
+    try {
+      const docRef = doc(db, APP_STATE_COLLECTION, APP_STATE_DOC);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const raw = snap.data();
+        this.isConnected = true;
+        this.lastSyncTime = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        this.lastError = null;
+        this.notifyStatus();
+        return {
+          maquinas: Array.isArray(raw.maquinas) ? raw.maquinas : [],
+          preparadores: Array.isArray(raw.preparadores) ? raw.preparadores : [],
+          tarefas1: Array.isArray(raw.tarefas1) ? raw.tarefas1 : [],
+          tarefas2: Array.isArray(raw.tarefas2) ? raw.tarefas2 : [],
+          tarefasPendencias: Array.isArray(raw.tarefasPendencias) ? raw.tarefasPendencias : [],
+          turnoConfig: raw.turnoConfig || { dias: ['1', '2', '3', '4', '5'], inicio: '07:00', fim: '17:00' },
+          setupsAtivos: raw.setupsAtivos || {},
+          concluidos: Array.isArray(raw.concluidos) ? raw.concluidos : []
+        };
+      }
+    } catch (err: any) {
+      console.warn('Aviso ao consultar Firestore:', err);
+    }
+    return null;
+  }
+
+  /**
    * Grava o estado atual no documento mestre do Firestore (sobrescreve 100% sem manter registros zumbis)
    */
   public static async salvarStore(data: StoreData): Promise<void> {

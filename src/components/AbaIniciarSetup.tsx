@@ -342,6 +342,7 @@ export const AbaIniciarSetup: React.FC<AbaIniciarSetupProps> = ({
                 value={senhaExterno}
                 onChange={(e) => setSenhaExterno(e.target.value)}
                 placeholder="Digite a senha..."
+                autoComplete="new-password"
                 autoFocus
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-center text-white font-mono text-base focus:border-emerald-500 focus:outline-none"
               />

@@ -357,9 +357,11 @@ class StoreManager {
       const duracaoFormatada = formatarTempoStr(duracaoMs);
       const horaIni = getHoraSP(setup.paradaAtual.inicioMs);
       const horaFim = getHoraSP(agora);
+      setup.historico = (setup.historico || []).filter((h) => !h.includes('Parada iniciada'));
       setup.historico.push(`[${horaIni} às ${horaFim}] Parada (${duracaoFormatada}): ${motivoObrigatorio.trim()}`);
       setup.paradaAtual = undefined;
     } else {
+      setup.historico = (setup.historico || []).filter((h) => !h.includes('Parada iniciada'));
       setup.historico.push(`[${strDH}] Parada encerrada: ${motivoObrigatorio.trim()}`);
     }
 
@@ -387,9 +389,11 @@ class StoreManager {
         ev.emAndamento = false;
       }
       setup.paradaAtiva = false;
+      const duracaoFormatada = formatarTempoStr(duracaoMs);
       const horaIni = getHoraSP(setup.paradaAtual.inicioMs);
       const horaFim = getHoraSP(agora);
-      setup.historico.push(`[${horaIni} às ${horaFim}] Parada: ${setup.paradaAtual.motivo}`);
+      setup.historico = (setup.historico || []).filter((h) => !h.includes('Parada iniciada'));
+      setup.historico.push(`[${horaIni} às ${horaFim}] Parada (${duracaoFormatada}): ${setup.paradaAtual.motivo}`);
       setup.paradaAtual = undefined;
     }
 

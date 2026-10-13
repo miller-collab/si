@@ -1,5 +1,6 @@
 import React from 'react';
 import type { SetupConcluido } from '../types';
+import { extrairLinhasParadas } from '../utils/pdfGestor';
 
 export interface DadosImpressaoGestor {
   filtrados: SetupConcluido[];
@@ -78,11 +79,9 @@ export const AreaImpressao: React.FC<AreaImpressaoProps> = ({
                   <td style={{ border: '1px solid #000', padding: '4px 5px' }}>{c.modeloAnterior || '-'}</td>
                   <td style={{ border: '1px solid #000', padding: '4px 5px' }}>{c.peca}</td>
                   <td style={{ border: '1px solid #000', padding: '4px 5px', fontSize: '10px', color: '#333' }}>
-                    {c.historico && c.historico.trim() !== ''
-                      ? c.historico.split('|').map((e, idx) => (
-                          <div key={idx}>• {e.trim()}</div>
-                        ))
-                      : '-'}
+                    {extrairLinhasParadas(c).map((e, idx) => (
+                      <div key={idx}>• {e.trim()}</div>
+                    ))}
                   </td>
                   <td style={{ border: '1px solid #000', padding: '4px 5px', textAlign: 'center', fontWeight: 'bold' }}>
                     {c.tempo}
@@ -184,9 +183,9 @@ export const AreaImpressao: React.FC<AreaImpressaoProps> = ({
                     <strong>Data:</strong> {c.data} | <strong>Preparadores:</strong> {c.prep1} / {c.prep2} | <strong>Mod. Ant:</strong> {c.modeloAnterior || '-'} | <strong>Peça Atual:</strong> {c.peca}
                   </div>
                   <div style={{ fontSize: '10px', paddingLeft: '10px', borderLeft: '3px solid #666', backgroundColor: '#f9fafb', padding: '6px' }}>
-                    {c.historico && c.historico.trim() !== ''
-                      ? c.historico.split('|').map((ev, i) => <div key={i}>• {ev.trim()}</div>)
-                      : 'Sem histórico detalhado.'}
+                    {extrairLinhasParadas(c).map((ev, i) => (
+                      <div key={i}>• {ev.trim()}</div>
+                    ))}
                   </div>
                 </div>
               ))}
