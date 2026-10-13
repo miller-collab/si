@@ -121,7 +121,8 @@ export default function App() {
           setStoreData(cloudData);
           checarTurno(cloudData.turnoConfig);
           setOnline(true);
-          // Mantém o disco do servidor local 100% alinhado com o Firestore
+          // Mantém o cache local e o disco do servidor 100% alinhados com o Firestore
+          SetupApiService.setCache(cloudData, false);
           SetupApiService.syncFromCloud(cloudData);
         }
       }
@@ -305,9 +306,17 @@ export default function App() {
       console.warn('Sync Firebase ao iniciar setup:', fbErr);
     });
 
-    // 3. Local backend disk persistence
+    // 3. Local backend disk persistence and internal cache
     try {
-      await SetupApiService.iniciarSetup(maquina.id, maquina.maquina, maquina.peca, modClean);
+      await SetupApiService.iniciarSetup(
+        maquina.id,
+        maquina.maquina,
+        maquina.peca,
+        modClean,
+        setupId,
+        agora,
+        dataInicioStr
+      );
     } catch (err: any) {
       console.warn('Backend local persist aviso:', err);
     }
@@ -341,7 +350,7 @@ export default function App() {
               [id]: atualizado
             }
           };
-          FirebaseService.salvarStore(next).catch(() => {});
+          FirebaseService.salvarStore(next).catch((e) => console.warn('Erro ao salvar card no Firebase:', e));
           return next;
         });
       }
@@ -352,10 +361,21 @@ export default function App() {
 
   const handleDesconto = async (setupId: string, tipo: 'cafe' | 'almoco') => {
     try {
-      await SetupApiService.aplicarDesconto(setupId, tipo);
-      const updated = await carregarDados();
+      const updatedSetup = await SetupApiService.aplicarDesconto(setupId, tipo);
+      if (updatedSetup) {
+        setStoreData((prev) => {
+          const next = {
+            ...prev,
+            setupsAtivos: {
+              ...prev.setupsAtivos,
+              [updatedSetup.id]: updatedSetup
+            }
+          };
+          FirebaseService.salvarStore(next).catch((e) => console.warn('Erro ao salvar desconto no Firebase:', e));
+          return next;
+        });
+      }
       showToast(tipo === 'cafe' ? 'Intervalo de Café registrado!' : 'Intervalo de Almoço registrado!');
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err) {
       console.error(err);
       showToast('Erro ao registrar intervalo.');
@@ -364,10 +384,21 @@ export default function App() {
 
   const handleIniciarParada = async (setupId: string, motivo: string) => {
     try {
-      await SetupApiService.iniciarParada(setupId, motivo);
-      const updated = await carregarDados();
+      const updatedSetup = await SetupApiService.iniciarParada(setupId, motivo);
+      if (updatedSetup) {
+        setStoreData((prev) => {
+          const next = {
+            ...prev,
+            setupsAtivos: {
+              ...prev.setupsAtivos,
+              [updatedSetup.id]: updatedSetup
+            }
+          };
+          FirebaseService.salvarStore(next).catch((e) => console.warn('Erro ao salvar parada no Firebase:', e));
+          return next;
+        });
+      }
       showToast(`Parada iniciada: ${motivo}`);
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err) {
       console.error(err);
       showToast('Erro ao registrar parada.');
@@ -376,10 +407,21 @@ export default function App() {
 
   const handleFinalizarParada = async (setupId: string, motivo: string) => {
     try {
-      await SetupApiService.finalizarParada(setupId, motivo);
-      const updated = await carregarDados();
+      const updatedSetup = await SetupApiService.finalizarParada(setupId, motivo);
+      if (updatedSetup) {
+        setStoreData((prev) => {
+          const next = {
+            ...prev,
+            setupsAtivos: {
+              ...prev.setupsAtivos,
+              [updatedSetup.id]: updatedSetup
+            }
+          };
+          FirebaseService.salvarStore(next).catch((e) => console.warn('Erro ao finalizar parada no Firebase:', e));
+          return next;
+        });
+      }
       showToast('Parada finalizada e retomado!');
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err) {
       console.error(err);
       showToast('Erro ao finalizar parada.');
@@ -395,13 +437,15 @@ export default function App() {
   ) => {
     try {
       const resp = await SetupApiService.liberarMaquina(id, prep1, prep2, tempoFormatado, tempoMs);
-      const updated = await carregarDados();
+      if (resp?.data) {
+        setStoreData(resp.data);
+        FirebaseService.salvarStore(resp.data).catch(() => {});
+      } else {
+        await carregarDados();
+      }
       showToast(`Setup concluído! Máquina liberada para produção.`);
       if (resp?.setupConcluido) {
         FirebaseService.registrarSetupConcluido(resp.setupConcluido).catch(() => {});
-      }
-      if (updated) {
-        FirebaseService.salvarStore(updated).catch(() => {});
       }
     } catch (err) {
       console.error(err);

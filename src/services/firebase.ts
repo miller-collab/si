@@ -142,7 +142,7 @@ export class FirebaseService {
   public static async salvarStore(data: StoreData): Promise<void> {
     try {
       const docRef = doc(db, APP_STATE_COLLECTION, APP_STATE_DOC);
-      const payload = {
+      const rawPayload = {
         maquinas: data.maquinas || [],
         preparadores: data.preparadores || [],
         tarefas1: data.tarefas1 || [],
@@ -151,16 +151,21 @@ export class FirebaseService {
         turnoConfig: data.turnoConfig,
         setupsAtivos: data.setupsAtivos || {},
         concluidos: data.concluidos || [],
+        sheetConfig: data.sheetConfig || null,
         updatedAt: Date.now()
       };
 
+      // Limpeza profunda de qualquer valor 'undefined' para compatibilidade 100% estrita com o Firestore
+      const cleanPayload = JSON.parse(JSON.stringify(rawPayload));
+
       // Substitui integralmente o documento no Firestore para garantir exclusões imediatas
-      await setDoc(docRef, payload);
+      await setDoc(docRef, cleanPayload);
       this.isConnected = true;
       this.lastSyncTime = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
       this.lastError = null;
       this.notifyStatus();
     } catch (err: any) {
+      console.error('Erro ao salvar no Firestore:', err);
       this.isConnected = false;
       this.lastError = err.message;
       this.notifyStatus();
@@ -235,7 +240,8 @@ export class FirebaseService {
   public static async registrarSetupConcluido(setup: SetupConcluido): Promise<void> {
     try {
       const docRef = doc(db, 'setups_concluidos', setup.id);
-      await setFirestoreDoc(docRef, { ...setup, savedAt: Date.now() }, { merge: true });
+      const cleanSetup = JSON.parse(JSON.stringify({ ...setup, savedAt: Date.now() }));
+      await setFirestoreDoc(docRef, cleanSetup, { merge: true });
     } catch (e) {
       console.warn('Erro ao salvar documento individual no Firestore:', e);
     }
@@ -247,13 +253,16 @@ export class FirebaseService {
   public static async criarSnapshotNuvem(data: StoreData, autor: string = 'Líder CNC'): Promise<string> {
     const backupId = `backup_${Date.now()}`;
     const docRef = doc(db, 'backups_cloud', backupId);
-    await setDoc(docRef, {
-      ...data,
-      backupId,
-      criadoEm: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-      timestamp: Date.now(),
-      autor
-    });
+    const cleanData = JSON.parse(
+      JSON.stringify({
+        ...data,
+        backupId,
+        criadoEm: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+        timestamp: Date.now(),
+        autor
+      })
+    );
+    await setDoc(docRef, cleanData);
     return backupId;
   }
 

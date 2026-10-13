@@ -92,10 +92,12 @@ export class SetupApiService {
   public static getCachedData(): StoreData | null {
     if (this.cachedData) return this.cachedData;
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        this.cachedData = JSON.parse(saved);
-        return this.cachedData;
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          this.cachedData = JSON.parse(saved);
+          return this.cachedData;
+        }
       }
     } catch (e) {
       console.warn('Erro ao ler cache local:', e);
@@ -135,7 +137,9 @@ export class SetupApiService {
     const newStr = JSON.stringify(data);
     this.cachedData = data;
     try {
-      localStorage.setItem(STORAGE_KEY, newStr);
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, newStr);
+      }
     } catch (e) {
       console.warn('Erro ao gravar cache local:', e);
     }
@@ -228,20 +232,53 @@ export class SetupApiService {
     return current;
   }
 
+  /**
+   * Localiza com segurança um setup ativo no store por id, rowId ou nome da máquina,
+   * evitando que discrepâncias sutis de identificador bloqueiem paradas ou salvamentos.
+   */
+  public static findSetupAtivo(
+    store: StoreData,
+    id: string
+  ): { setup: SetupAtivo; key: string } | null {
+    if (!store.setupsAtivos) return null;
+    if (store.setupsAtivos[id]) {
+      return { setup: store.setupsAtivos[id], key: id };
+    }
+    const clean = String(id || '').trim().toUpperCase();
+    const key = Object.keys(store.setupsAtivos).find((k) => {
+      const s = store.setupsAtivos[k];
+      return (
+        k === id ||
+        s.id === id ||
+        String(s.rowId) === String(id) ||
+        (s.maquina && s.maquina.trim().toUpperCase() === clean)
+      );
+    });
+    if (key && store.setupsAtivos[key]) {
+      return { setup: store.setupsAtivos[key], key };
+    }
+    return null;
+  }
+
   public static async iniciarSetup(
     rowId: string,
     maquina: string,
     peca: string,
-    modeloAnterior: string
+    modeloAnterior: string,
+    forcedId?: string,
+    forcedInicioMs?: number,
+    forcedDataInicioStr?: string
   ): Promise<{ setup: SetupAtivo; data: StoreData }> {
-    const agora = Date.now();
-    const dataInicioStr = getDataHoraCurtaSP(agora);
+    const agora = forcedInicioMs || Date.now();
+    const dataInicioStr = forcedDataInicioStr || getDataHoraCurtaSP(agora);
+    const id = forcedId || `setup_${agora}`;
 
     // 1. Tenta rota do servidor se disponível
     const serverResult = await this.safeFetchJson<{ setup: SetupAtivo; data: StoreData }>('/api/setup/iniciar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id,
         rowId,
         maquina,
         peca,
@@ -258,7 +295,6 @@ export class SetupApiService {
 
     // 2. Execução autônoma direta para Vercel / Cloud Run / Offline
     const store = this.getCurrentStore();
-    const id = `setup_${agora}`;
     const novoSetup: SetupAtivo = {
       id,
       rowId,
@@ -316,10 +352,11 @@ export class SetupApiService {
     }
 
     const store = this.getCurrentStore();
-    const setup = store.setupsAtivos?.[id];
-    if (!setup) {
+    const found = this.findSetupAtivo(store, id);
+    if (!found) {
       throw new Error('Setup ativo não encontrado');
     }
+    const setup = found.setup;
 
     if (prep1Val !== undefined) setup.prep1Val = prep1Val;
     if (prep2Val !== undefined) setup.prep2Val = prep2Val;
@@ -349,8 +386,9 @@ export class SetupApiService {
     }
 
     const store = this.getCurrentStore();
-    const setup = store.setupsAtivos?.[id];
-    if (!setup) throw new Error('Setup não encontrado');
+    const found = this.findSetupAtivo(store, id);
+    if (!found) throw new Error('Setup não encontrado');
+    const setup = found.setup;
 
     const agora = Date.now();
     const strDH = new Date(agora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -405,8 +443,9 @@ export class SetupApiService {
     }
 
     const store = this.getCurrentStore();
-    const setup = store.setupsAtivos?.[id];
-    if (!setup) throw new Error('Setup não encontrado');
+    const found = this.findSetupAtivo(store, id);
+    if (!found) throw new Error('Setup não encontrado');
+    const setup = found.setup;
 
     const agora = Date.now();
     const strDH = new Date(agora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -444,8 +483,9 @@ export class SetupApiService {
     }
 
     const store = this.getCurrentStore();
-    const setup = store.setupsAtivos?.[id];
-    if (!setup) throw new Error('Setup não encontrado');
+    const found = this.findSetupAtivo(store, id);
+    if (!found) throw new Error('Setup não encontrado');
+    const setup = found.setup;
 
     const agora = Date.now();
     const strDH = new Date(agora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -504,8 +544,9 @@ export class SetupApiService {
     }
 
     const store = this.getCurrentStore();
-    const setup = store.setupsAtivos?.[id];
-    if (!setup) throw new Error('Setup não encontrado');
+    const found = this.findSetupAtivo(store, id);
+    if (!found) throw new Error('Setup não encontrado');
+    const { setup, key } = found;
 
     const agora = Date.now();
     const dataStr = getDataHoraCurtaSP(agora);
@@ -574,15 +615,16 @@ export class SetupApiService {
     }
 
     const store = this.getCurrentStore();
-    const setup = store.setupsAtivos?.[id];
-    if (!setup) return false;
+    const found = this.findSetupAtivo(store, id);
+    if (!found) return false;
+    const { setup, key } = found;
 
     const item = (store.concluidos || []).find((c) => c.maquina === setup.maquina && c.peca === setup.peca);
     if (item) {
       item.pendenciasConcluidas = true;
     }
 
-    delete store.setupsAtivos[id];
+    delete store.setupsAtivos[key];
     this.setCache(store);
     FirebaseService.salvarStore(store).catch(() => {});
     return true;
@@ -865,7 +907,12 @@ export class SetupApiService {
     }
 
     const store = this.getCurrentStore();
-    delete store.setupsAtivos[id];
+    const found = this.findSetupAtivo(store, id);
+    if (found) {
+      delete store.setupsAtivos[found.key];
+    } else if (store.setupsAtivos[id]) {
+      delete store.setupsAtivos[id];
+    }
     this.setCache(store);
     FirebaseService.salvarStore(store).catch(() => {});
     return store;
