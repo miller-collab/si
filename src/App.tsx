@@ -27,6 +27,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ModalIniciarSetup } from './components/ModalIniciarSetup';
 import { ModalResumoHistorico } from './components/ModalResumoHistorico';
 import { ModalBuscaRegistros } from './components/ModalBuscaRegistros';
+import { ModalConectarTablets } from './components/ModalConectarTablets';
 import {
   AreaImpressao,
   type DadosImpressaoDashboard,
@@ -61,6 +62,7 @@ export default function App() {
     titulo: ''
   });
   const [modalBuscaAberto, setModalBuscaAberto] = useState(false);
+  const [modalTabletsAberto, setModalTabletsAberto] = useState(false);
   const [modalResetAberto, setModalResetAberto] = useState(false);
   const [senhaReset, setSenhaReset] = useState('');
   const [erroSenhaReset, setErroSenhaReset] = useState(false);
@@ -713,6 +715,7 @@ export default function App() {
         aoBackupTudo={handleBackupTudo}
         aoAbrirBusca={handleAbrirBusca}
         aoAbrirReset={handleAbrirReset}
+        aoAbrirTablets={() => setModalTabletsAberto(true)}
       />
 
       {/* Main Content Area */}
@@ -824,6 +827,14 @@ export default function App() {
         aberto={modalBuscaAberto}
         aoFechar={() => setModalBuscaAberto(false)}
         concluidos={storeData.concluidos || []}
+      />
+
+      {/* Modal de Conectar Tablets com QR Code e Link Único */}
+      <ModalConectarTablets
+        aberto={modalTabletsAberto}
+        aoFechar={() => setModalTabletsAberto(false)}
+        tabletsConectados={1}
+        online={online}
       />
 
       {/* Modal de Confirmação de Reset (Começar do Zero) */}

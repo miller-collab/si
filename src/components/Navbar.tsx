@@ -9,7 +9,9 @@ import {
   CalendarClock,
   Database,
   Search,
-  Cloud
+  Cloud,
+  QrCode,
+  Tablet
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -22,6 +24,7 @@ interface NavbarProps {
   aoBackupTudo: () => void;
   aoAbrirBusca: () => void;
   aoAbrirReset?: () => void;
+  aoAbrirTablets?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -31,7 +34,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   turnoAtivo,
   shiftScheduleStr: _shiftScheduleStr,
   aoBackupTudo,
-  aoAbrirBusca
+  aoAbrirBusca,
+  aoAbrirTablets
 }) => {
   return (
     <nav className="w-20 md:w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between py-5 shadow-2xl z-30 select-none">
@@ -165,6 +169,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             Filtro
           </span>
         </button>
+
+        {/* Botão de CONECTAR TABLETS (Link Único e QR Code) */}
+        {aoAbrirTablets && (
+          <button
+            type="button"
+            onClick={aoAbrirTablets}
+            className="w-full flex items-center justify-between p-2.5 rounded-xl bg-purple-950/40 hover:bg-purple-900/40 border border-purple-500/30 hover:border-purple-500/60 text-[11px] text-purple-300 transition group active:scale-95 shadow-sm"
+            title="Conectar Tablets: QR Code e Link oficial sincronizado para os aparelhos"
+          >
+            <div className="flex items-center gap-2">
+              <QrCode className="w-4 h-4 text-purple-400 shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="font-bold hidden md:inline">Conectar Tablets</span>
+            </div>
+            <span className="text-[9px] font-bold bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30 hidden md:inline">
+              Link
+            </span>
+          </button>
+        )}
 
         {/* Firebase Cloud Storage Status */}
         <div className="hidden md:flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800 text-[10px] text-slate-400">
