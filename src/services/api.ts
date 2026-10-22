@@ -576,6 +576,7 @@ export class SetupApiService {
     setup.prep2Val = prep2;
     setup.tempoFormatado = tempoFormatado;
     setup.tempoSetupMs = tempoMs;
+    setup.pendenciasInicioMs = agora;
     setup.updatedAt = agora;
 
     const novoConcluido: SetupConcluido = {
@@ -591,7 +592,8 @@ export class SetupApiService {
       tempoMs,
       historico: setup.historico.join(' | '),
       eventos: setup.eventos,
-      pendenciasConcluidas: false
+      pendenciasConcluidas: false,
+      pendenciasInicioMs: agora
     };
 
     store.concluidos = [novoConcluido, ...(store.concluidos || [])];
@@ -619,9 +621,20 @@ export class SetupApiService {
     if (!found) return false;
     const { setup, key } = found;
 
-    const item = (store.concluidos || []).find((c) => c.maquina === setup.maquina && c.peca === setup.peca);
+    const agora = Date.now();
+    const inicioPend = setup.pendenciasInicioMs || setup.updatedAt || agora;
+    const duracaoPendMs = Math.max(0, agora - inicioPend);
+    const tempoPendFormatado = formatarTempoMs(duracaoPendMs);
+
+    const item =
+      (store.concluidos || []).find((c) => c.maquina === setup.maquina && c.peca === setup.peca && !c.pendenciasConcluidas) ||
+      (store.concluidos || []).find((c) => c.maquina === setup.maquina && c.peca === setup.peca);
     if (item) {
       item.pendenciasConcluidas = true;
+      item.pendenciasInicioMs = inicioPend;
+      item.tempoPendenciasMs = duracaoPendMs;
+      item.tempoPendenciasFormatado = tempoPendFormatado;
+      FirebaseService.registrarSetupConcluido(item).catch(() => {});
     }
 
     delete store.setupsAtivos[key];

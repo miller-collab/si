@@ -329,6 +329,14 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
             displayTime = formatarTempo(tempoLiquidoMs);
           }
 
+          // Cronômetro de pendências ao vivo (Foto 1)
+          // Inicia instantaneamente na liberação da máquina ("Liberar Máquina")
+          const pendenciasInicio = setup.pendenciasInicioMs || (isLiberada ? setup.updatedAt : null);
+          const tempoPendenciasDecorridoMs = isLiberada && pendenciasInicio
+            ? Math.max(0, agora - pendenciasInicio)
+            : 0;
+          const tempoPendenciasStr = formatarTempo(tempoPendenciasDecorridoMs);
+
           // Stop timer calculation
           let tempoParadaAtualMs = 0;
           if (setup.paradaAtiva && setup.paradaAtual) {
@@ -859,6 +867,18 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
                       <CheckSquare className="w-3.5 h-3.5 text-purple-400" />
                       PENDÊNCIAS
                     </span>
+
+                    {/* Cronômetro discreto das pendências pós-liberação (Foto 1) */}
+                    {isLiberada && (
+                      <div
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-950/90 border border-purple-500/50 text-purple-300 font-mono text-[11px] font-bold shadow-sm"
+                        title="Cronômetro das pendências pós-liberação da máquina"
+                      >
+                        <Clock className="w-3 h-3 text-purple-400 animate-pulse" />
+                        <span className="tabular-nums tracking-wide">{tempoPendenciasStr}</span>
+                      </div>
+                    )}
+
                     <span
                       className={`text-[10px] font-bold font-mono ${
                         pendFeito === pendTotal ? 'text-emerald-400' : 'text-purple-400'

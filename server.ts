@@ -402,12 +402,13 @@ class StoreManager {
     setup.prep2Val = prep2;
     setup.tempoFormatado = tempoFormatado;
     setup.tempoSetupMs = tempoMs;
-    setup.updatedAt = Date.now();
+    setup.pendenciasInicioMs = agora;
+    setup.updatedAt = agora;
 
     const novoConcluido: SetupConcluido = {
-      id: `conc_${Date.now()}`,
+      id: `conc_${agora}`,
       data: dataStr,
-      timestamp: Date.now(),
+      timestamp: agora,
       maquina: setup.maquina,
       peca: setup.peca,
       modeloAnterior: setup.modeloAnterior,
@@ -417,7 +418,8 @@ class StoreManager {
       tempoMs,
       historico: setup.historico.join(' | '),
       eventos: setup.eventos,
-      pendenciasConcluidas: false
+      pendenciasConcluidas: false,
+      pendenciasInicioMs: agora
     };
 
     this.data.concluidos.unshift(novoConcluido);
@@ -429,9 +431,19 @@ class StoreManager {
     const setup = this.data.setupsAtivos[id];
     if (!setup) return false;
 
-    const item = this.data.concluidos.find(c => c.maquina === setup.maquina && c.peca === setup.peca);
+    const agora = Date.now();
+    const inicioPend = setup.pendenciasInicioMs || setup.updatedAt || agora;
+    const duracaoPendMs = Math.max(0, agora - inicioPend);
+    const tempoPendFormatado = formatarTempoStr(duracaoPendMs);
+
+    const item =
+      this.data.concluidos.find(c => c.maquina === setup.maquina && c.peca === setup.peca && !c.pendenciasConcluidas) ||
+      this.data.concluidos.find(c => c.maquina === setup.maquina && c.peca === setup.peca);
     if (item) {
       item.pendenciasConcluidas = true;
+      item.pendenciasInicioMs = inicioPend;
+      item.tempoPendenciasMs = duracaoPendMs;
+      item.tempoPendenciasFormatado = tempoPendFormatado;
     }
 
     delete this.data.setupsAtivos[id];

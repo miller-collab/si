@@ -33,8 +33,9 @@ function formatarHoraSimples(d: number | Date): string {
  * com o horário de início e fim da parada explícitos.
  */
 export function extrairLinhasParadas(c: SetupConcluido): string[] {
+  const linhas: string[] = [];
+
   if (c.eventos && Array.isArray(c.eventos) && c.eventos.length > 0) {
-    const linhas: string[] = [];
     c.eventos.forEach((ev) => {
       let faixaTempo = '';
       if (ev.inicioMs && ev.fimMs) {
@@ -59,10 +60,7 @@ export function extrairLinhasParadas(c: SetupConcluido): string[] {
         linhas.push(`${faixaTempo}Parada: ${ev.motivo || 'Sem motivo informado'}`);
       }
     });
-    if (linhas.length > 0) return linhas;
-  }
-
-  if (c.historico && c.historico.trim() !== '') {
+  } else if (c.historico && c.historico.trim() !== '') {
     const partes = c.historico.split('|').map((p) => p.trim()).filter(Boolean);
     const paradas = partes.filter((p) => {
       const low = p.toLowerCase();
@@ -74,10 +72,19 @@ export function extrairLinhasParadas(c: SetupConcluido): string[] {
       }
       return true;
     });
-    if (paradas.length > 0) return paradas;
+    linhas.push(...paradas);
   }
 
-  return ['Sem paradas registradas neste setup.'];
+  if (linhas.length === 0) {
+    linhas.push('Sem paradas registradas neste setup.');
+  }
+
+  // Tempo de pendências pós-liberação da máquina (guardar ferramentas / calibres / organização)
+  if (c.tempoPendenciasFormatado) {
+    linhas.push(`[Pós-Setup] Organização & Pendências: ${c.tempoPendenciasFormatado}`);
+  }
+
+  return linhas;
 }
 
 /**

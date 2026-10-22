@@ -45,6 +45,9 @@ export interface SetupAtivo {
   setupRegistrado: boolean; // True once machine is released and official setup time is locked
   tempoFormatado?: string;  // Final locked time for setup
   tempoSetupMs?: number;
+  pendenciasInicioMs?: number;      // Timestamp when machine was released and pendências started counting
+  tempoPendenciasMs?: number;       // Final duration of pendências
+  tempoPendenciasFormatado?: string;// Formatted duration of pendências (e.g. "00:12:45")
   updatedAt: number;
 }
 
@@ -62,6 +65,9 @@ export interface SetupConcluido {
   historico: string;
   eventos?: ParadaEvento[];
   pendenciasConcluidas: boolean;
+  pendenciasInicioMs?: number;
+  tempoPendenciasMs?: number;
+  tempoPendenciasFormatado?: string;
   segundosCalculados?: number;
 }
 
