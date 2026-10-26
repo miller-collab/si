@@ -1,5 +1,6 @@
 import type { StoreData, SetupAtivo, TurnoConfig, GoogleSheetConfig, SetupConcluido, Maquina, ParadaEvento } from '../types';
 import { FirebaseService } from './firebase';
+import { calcularTempoValidoTurno } from '../utils/turno';
 
 const STORAGE_KEY = 'setup_interno_local_cache';
 
@@ -571,6 +572,7 @@ export class SetupApiService {
       setup.paradaAtual = undefined;
     }
 
+    const horaLib = getHoraSP(agora);
     setup.setupRegistrado = true;
     setup.prep1Val = prep1;
     setup.prep2Val = prep2;
@@ -578,6 +580,7 @@ export class SetupApiService {
     setup.tempoSetupMs = tempoMs;
     setup.pendenciasInicioMs = agora;
     setup.updatedAt = agora;
+    setup.historico.push(`[${horaLib}] Máquina liberada para produção (Início das pendências)`);
 
     const novoConcluido: SetupConcluido = {
       id: `conc_${agora}`,
@@ -623,8 +626,14 @@ export class SetupApiService {
 
     const agora = Date.now();
     const inicioPend = setup.pendenciasInicioMs || setup.updatedAt || agora;
-    const duracaoPendMs = Math.max(0, agora - inicioPend);
+    // Respeita rigorosamente os horários e dias configurados do turno de trabalho
+    const duracaoPendMs = calcularTempoValidoTurno(inicioPend, agora, store.turnoConfig);
     const tempoPendFormatado = formatarTempoMs(duracaoPendMs);
+    const horaIni = getHoraSP(inicioPend);
+    const horaFim = getHoraSP(agora);
+    const linhaPend = `[${horaIni} às ${horaFim}] [Pós-Setup] Organização & Pendências: ${tempoPendFormatado}`;
+
+    setup.historico.push(linhaPend);
 
     const item =
       (store.concluidos || []).find((c) => c.maquina === setup.maquina && c.peca === setup.peca && !c.pendenciasConcluidas) ||
@@ -632,8 +641,26 @@ export class SetupApiService {
     if (item) {
       item.pendenciasConcluidas = true;
       item.pendenciasInicioMs = inicioPend;
+      item.pendenciasFimMs = agora;
       item.tempoPendenciasMs = duracaoPendMs;
       item.tempoPendenciasFormatado = tempoPendFormatado;
+
+      // Evidencia o período de pendências explicitamente no histórico
+      if (!item.historico || !item.historico.includes('Organização & Pendências')) {
+        item.historico = item.historico ? `${item.historico} | ${linhaPend}` : linhaPend;
+      }
+
+      const evPend: ParadaEvento = {
+        id: `ev_pend_${agora}`,
+        timestamp: `${horaIni} às ${horaFim}`,
+        tipo: 'info',
+        motivo: `[Pós-Setup] Organização & Pendências: ${tempoPendFormatado}`,
+        inicioMs: inicioPend,
+        fimMs: agora,
+        duracaoMs: duracaoPendMs
+      };
+      item.eventos = [...(item.eventos || []).filter((e) => !e.id.startsWith('ev_pend_')), evPend];
+
       FirebaseService.registrarSetupConcluido(item).catch(() => {});
     }
 

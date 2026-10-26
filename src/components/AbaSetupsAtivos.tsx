@@ -330,10 +330,10 @@ export const AbaSetupsAtivos: React.FC<AbaSetupsAtivosProps> = ({
           }
 
           // Cronômetro de pendências ao vivo (Foto 1)
-          // Inicia instantaneamente na liberação da máquina ("Liberar Máquina")
+          // Respeita rigorosamente os horários e dias configurados do turno de trabalho
           const pendenciasInicio = setup.pendenciasInicioMs || (isLiberada ? setup.updatedAt : null);
           const tempoPendenciasDecorridoMs = isLiberada && pendenciasInicio
-            ? Math.max(0, agora - pendenciasInicio)
+            ? calcularTempoValidoTurno(pendenciasInicio, agora, turnoConfig)
             : 0;
           const tempoPendenciasStr = formatarTempo(tempoPendenciasDecorridoMs);
 

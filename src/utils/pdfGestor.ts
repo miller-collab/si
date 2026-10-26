@@ -56,6 +56,8 @@ export function extrairLinhasParadas(c: SetupConcluido): string[] {
         linhas.push(`${faixaTempo}Intervalo de Café (-15 min)`);
       } else if (ev.tipo === 'almoco') {
         linhas.push(`${faixaTempo}Almoço (-1.5h)`);
+      } else if (ev.tipo === 'info') {
+        linhas.push(`${faixaTempo}${ev.motivo}`);
       } else {
         linhas.push(`${faixaTempo}Parada: ${ev.motivo || 'Sem motivo informado'}`);
       }
@@ -75,13 +77,27 @@ export function extrairLinhasParadas(c: SetupConcluido): string[] {
     linhas.push(...paradas);
   }
 
-  if (linhas.length === 0) {
-    linhas.push('Sem paradas registradas neste setup.');
+  // Tempo e período explícito de pendências pós-liberação da máquina (guardar ferramentas / calibres / organização)
+  const jaTemPendencias = linhas.some(
+    (l) => l.toLowerCase().includes('organização & pendências') || l.toLowerCase().includes('organizacao & pendencias')
+  );
+
+  if (!jaTemPendencias && c.tempoPendenciasFormatado) {
+    let faixaPend = '';
+    if (c.pendenciasInicioMs && c.pendenciasFimMs) {
+      const hIni = formatarHoraSimples(c.pendenciasInicioMs);
+      const hFim = formatarHoraSimples(c.pendenciasFimMs);
+      faixaPend = `[${hIni} às ${hFim}] `;
+    } else if (c.pendenciasInicioMs && c.tempoPendenciasMs) {
+      const hIni = formatarHoraSimples(c.pendenciasInicioMs);
+      const hFim = formatarHoraSimples(c.pendenciasInicioMs + c.tempoPendenciasMs);
+      faixaPend = `[${hIni} às ${hFim}] `;
+    }
+    linhas.push(`${faixaPend}[Pós-Setup] Organização & Pendências: ${c.tempoPendenciasFormatado}`);
   }
 
-  // Tempo de pendências pós-liberação da máquina (guardar ferramentas / calibres / organização)
-  if (c.tempoPendenciasFormatado) {
-    linhas.push(`[Pós-Setup] Organização & Pendências: ${c.tempoPendenciasFormatado}`);
+  if (linhas.length === 0) {
+    linhas.push('Sem paradas registradas neste setup.');
   }
 
   return linhas;

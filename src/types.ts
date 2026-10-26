@@ -46,6 +46,7 @@ export interface SetupAtivo {
   tempoFormatado?: string;  // Final locked time for setup
   tempoSetupMs?: number;
   pendenciasInicioMs?: number;      // Timestamp when machine was released and pendências started counting
+  pendenciasFimMs?: number;         // Timestamp when pendências were concluded
   tempoPendenciasMs?: number;       // Final duration of pendências
   tempoPendenciasFormatado?: string;// Formatted duration of pendências (e.g. "00:12:45")
   updatedAt: number;
@@ -66,6 +67,7 @@ export interface SetupConcluido {
   eventos?: ParadaEvento[];
   pendenciasConcluidas: boolean;
   pendenciasInicioMs?: number;
+  pendenciasFimMs?: number;
   tempoPendenciasMs?: number;
   tempoPendenciasFormatado?: string;
   segundosCalculados?: number;

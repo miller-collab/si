@@ -47,6 +47,14 @@ export const ModalResumoHistorico: React.FC<ModalResumoHistoricoProps> = ({
         </span>
       );
     }
+    if (lower.includes('pendência') || lower.includes('pendencia') || lower.includes('pós-setup') || lower.includes('pos-setup') || lower.includes('organização') || lower.includes('organizacao') || lower.includes('liberada')) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-purple-950 text-purple-300 border border-purple-700">
+          <Clock className="w-3 h-3 text-purple-400" />
+          Pós-Setup
+        </span>
+      );
+    }
     return (
       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-blue-950 text-blue-400 border border-blue-800">
         <Info className="w-3 h-3" />
@@ -56,12 +64,18 @@ export const ModalResumoHistorico: React.FC<ModalResumoHistoricoProps> = ({
   };
 
   const parseItem = (item: string) => {
+    let clean = item.trim();
+    if (clean.startsWith('•')) {
+      clean = clean.substring(1).trim();
+    }
     let dataHora = '-';
-    let descricao = item;
-    if (item.startsWith('[')) {
-      const parts = item.split('] ');
-      dataHora = parts[0].substring(1);
-      descricao = parts.slice(1).join('] ');
+    let descricao = clean;
+    if (clean.startsWith('[')) {
+      const idx = clean.indexOf(']');
+      if (idx !== -1) {
+        dataHora = clean.substring(1, idx);
+        descricao = clean.substring(idx + 1).trim();
+      }
     }
     return { dataHora, descricao };
   };
