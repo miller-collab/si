@@ -1,8 +1,39 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Acesso restrito exclusivamente aos tablets autenticados (via Firebase Anonymous Auth)
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // 1. Coleção granular de Setups Ativos (cada card é um documento isolado com versionamento)
+    match /setupsAtivos/{setupId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 2. Coleção granular de Setups Concluídos (cada histórico é um documento isolado)
+    match /concluidos/{concluidoId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 3. Documento de Configuração Central (máquinas, preparadores, checklists, turno)
+    match /config/{configId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 4. Coleção de Backups
+    match /backups_cloud/{backupId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 5. Suporte de leitura para migração transparente do estado legado
+    match /app_state/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Bloqueio padrão para qualquer outra rota não autorizada
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

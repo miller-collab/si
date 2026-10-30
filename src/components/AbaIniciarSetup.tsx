@@ -170,7 +170,7 @@ export const AbaIniciarSetup: React.FC<AbaIniciarSetupProps> = ({
                         e.stopPropagation();
                         setSenhaExterno('');
                         setErroSenhaExterno(false);
-                        setModalSenhaExterno({ aberto: true, maquinaId: item.id });
+                        setModalSenhaExterno({ aberto: true, maquinaId: item.id || item.maquina });
                       }}
                       title={isExternoPronto ? 'Setup externo pronto! Clique para alterar' : 'Marcar setup externo pronto'}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-md ${
@@ -190,7 +190,7 @@ export const AbaIniciarSetup: React.FC<AbaIniciarSetupProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeletarCardRapido(item.id);
+                        handleDeletarCardRapido(item.id || item.maquina);
                       }}
                       title="Excluir máquina da fila"
                       className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-slate-800/80 transition"

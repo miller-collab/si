@@ -1,21 +1,32 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  getFirestore,
+  type Firestore
+} from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
-export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+// Inicializa o app Firebase sem nenhuma dependência de Auth
+export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 const dbId = (firebaseConfig as any).firestoreDatabaseId;
-export const db = dbId && dbId !== '(default)'
-  ? getFirestore(app, dbId)
-  : getFirestore(app);
 
-// Connection test on boot
-export async function testFirestoreConnection(): Promise<boolean> {
-  try {
-    await getDocFromServer(doc(db, 'app_state', 'connection_test'));
-    return true;
-  } catch (error) {
-    console.warn('Firestore connection check:', error);
-    return false;
-  }
+let firestoreInstance: Firestore;
+try {
+  firestoreInstance = initializeFirestore(
+    app,
+    {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    },
+    dbId && dbId !== '(default)' ? dbId : undefined
+  );
+} catch {
+  // If already initialized (e.g. fast-refresh)
+  firestoreInstance = dbId && dbId !== '(default)' ? getFirestore(app, dbId) : getFirestore(app);
 }
+
+export const db: Firestore = firestoreInstance;

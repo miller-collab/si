@@ -49,6 +49,7 @@ export interface SetupAtivo {
   pendenciasFimMs?: number;         // Timestamp when pendências were concluded
   tempoPendenciasMs?: number;       // Final duration of pendências
   tempoPendenciasFormatado?: string;// Formatted duration of pendências (e.g. "00:12:45")
+  version?: number;
   updatedAt: number;
 }
 
@@ -71,6 +72,8 @@ export interface SetupConcluido {
   tempoPendenciasMs?: number;
   tempoPendenciasFormatado?: string;
   segundosCalculados?: number;
+  version?: number;
+  updatedAt?: number;
 }
 
 export interface GoogleSheetConfig {
@@ -93,4 +96,6 @@ export interface StoreData {
   concluidos: SetupConcluido[];
   serverTime?: number;
   sheetConfig?: GoogleSheetConfig;
+  version?: number;
+  updatedAt?: number;
 }

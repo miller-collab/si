@@ -1,35 +1,4 @@
 {
-  "maquinas": [],
-  "preparadores": [
-    "GABRIEL",
-    "CAIO",
-    "IGOR",
-    "JONAS",
-    "MILLER",
-    "LUCAS",
-    "RAFAEL",
-    "MATHEUS",
-    "ADRIANO",
-    "MARCELO"
-  ],
-  "tarefas1": [
-    "GUARDAR PGMS E FOTOS DO MODELO ATUAL NA PASTA DRIVE CORRETA AO INICIAR O NOVO SETUP",
-    "VERIFICAR A NECESSIDADE DE LIMPAR O CAVACO (MATERIAL DIFERENTE)",
-    "TROCAR PINÇAS ALIMENTADOR",
-    "AJUSTAR APERTO DAS BUCHAS GUIAS",
-    "AJUSTAR PARAMETROS DO ALIMENTADOR"
-  ],
-  "tarefas2": [
-    "TROCAR AS PINÇAS SE NECESSÁRIO",
-    "AJUSTAR APERTO DAS PINÇAS",
-    "GUARDAR PGMS ANTIGO PEN DRIVE E COLOCAR O NOVO",
-    "ALOCAR E FIXAR AS FERRAMENTAS CONFORME PGM ATUAL (AJUSTAR PGM E FERRAMENTAS)",
-    "PRESSET DAS FERRAMENTAS",
-    "SIMULAR NO VAZIO COM MUITA ATENÇÃO PARA ELIMINAR COLISÃO",
-    "AJUSTAR A POSIÇÃO DOS OLEOS",
-    "FAZER UMA PEÇA BOA CONFORME DESENHO",
-    "SOLTAR A MAQUINA PARA PRODUZIR ( ALERTAR INSPETOR SOBRE ALGUM DETALHE ESPECIAL NA PEÇA)"
-  ],
   "tarefasPendencias": [
     "FAZER VIDA UTIL DAS FERRAMENTAS",
     "FINALIZAR REGISTRO ANTIGO E ABRIR O NOVO",
@@ -44,17 +13,1366 @@
     "GUARDAR E ORGANIZAR FERRAMENTAS / CALIBRES / PEÇAS MODELO",
     "SINALIZAR INICIO DE PRODUÇÃO NA PLANILHA PCP"
   ],
+  "maquinas": [],
+  "tarefas2": [
+    "TROCAR AS PINÇAS SE NECESSÁRIO",
+    "AJUSTAR APERTO DAS PINÇAS",
+    "GUARDAR PGMS ANTIGO PEN DRIVE E COLOCAR O NOVO",
+    "ALOCAR E FIXAR AS FERRAMENTAS CONFORME PGM ATUAL (AJUSTAR PGM E FERRAMENTAS)",
+    "PRESSET DAS FERRAMENTAS",
+    "SIMULAR NO VAZIO COM MUITA ATENÇÃO PARA ELIMINAR COLISÃO",
+    "AJUSTAR A POSIÇÃO DOS OLEOS",
+    "FAZER UMA PEÇA BOA CONFORME DESENHO",
+    "SOLTAR A MAQUINA PARA PRODUZIR ( ALERTAR INSPETOR SOBRE ALGUM DETALHE ESPECIAL NA PEÇA)"
+  ],
   "turnoConfig": {
+    "fim": "17:10",
+    "inicio": "07:00",
     "dias": [
       "1",
       "2",
       "3",
       "4",
       "5"
-    ],
-    "inicio": "07:00",
-    "fim": "17:00"
+    ]
   },
-  "setupsAtivos": {},
-  "concluidos": []
+  "updatedAt": 1793305427220,
+  "sheetConfig": null,
+  "setupsAtivos": {
+    "setup_1793300697540": {
+      "eventos": [],
+      "lastTick": 1793300697540,
+      "prep2Val": "",
+      "historico": [
+        "[29/10/2026 às 16:04] Início do setup"
+      ],
+      "deductionsMs": 0,
+      "peca": "EIXO 1601A",
+      "checksStatePendencias": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "setupRegistrado": false,
+      "id": "setup_1793300697540",
+      "modeloAnterior": "AD1402",
+      "inicioMs": 1793300697540,
+      "dataInicio": "29/10/2026 às 16:04",
+      "rowId": "m_1792608845897",
+      "tempoDecorridoMs": 0,
+      "maquina": "TC07",
+      "paradaAtiva": false,
+      "updatedAt": 1793300697540,
+      "checksStateParte1": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "prep1Val": "",
+      "checksStateParte2": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    "setup_1793270594810": {
+      "pendenciasInicioMs": 1793279979701,
+      "inicioMs": 1793270594810,
+      "maquina": "TC0021",
+      "historico": [
+        "[29/10/2026 às 07:43] Início do setup",
+        "[08:27 às 08:34] Parada (00:06:48): Pegando insertos e trocando parafuso da TCAP",
+        "[08:36 às 08:48] Parada (00:12:32): Ginástica",
+        "[10:19] Máquina liberada para produção (Início das pendências)"
+      ],
+      "tempoDecorridoMs": 12312410,
+      "dataInicio": "29/10/2026 às 07:43",
+      "tempoFormatado": "02:17:04",
+      "setupRegistrado": true,
+      "prep1Val": "GABRIEL",
+      "modeloAnterior": "CU2537E10",
+      "rowId": "m_1793209754996",
+      "id": "setup_1793270594810",
+      "checksStateParte2": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eventos": [
+        {
+          "inicioMs": 1793273238226,
+          "duracaoMs": 408004,
+          "emAndamento": false,
+          "id": "parada_1793273238226",
+          "motivo": "Pegando insertos e trocando parafuso da TCAP",
+          "tipo": "parada",
+          "fimMs": 1793273646230,
+          "timestamp": "29/10/2026, 08:27:18"
+        },
+        {
+          "duracaoMs": 752279,
+          "inicioMs": 1793273779480,
+          "tipo": "parada",
+          "fimMs": 1793274531759,
+          "emAndamento": false,
+          "id": "parada_1793273779480",
+          "timestamp": "29/10/2026, 08:36:19",
+          "motivo": "Ginástica"
+        }
+      ],
+      "tempoSetupMs": 8224562,
+      "lastTick": 1793282907476,
+      "prep2Val": "GABRIEL",
+      "checksStateParte1": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "updatedAt": 1793282907476,
+      "checksStatePendencias": [
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "peca": "CU2538E10",
+      "paradaAtiva": false,
+      "deductionsMs": 1160283
+    },
+    "setup_1793115281950": {
+      "setupRegistrado": false,
+      "checksStateParte1": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "lastTick": 1793299739585,
+      "prep2Val": "CAIO",
+      "modeloAnterior": "AL32023",
+      "checksStateParte2": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false
+      ],
+      "updatedAt": 1793305427212,
+      "id": "setup_1793115281950",
+      "tempoDecorridoMs": 184457216,
+      "maquina": "TC16",
+      "checksStatePendencias": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        true
+      ],
+      "dataInicio": "27/10/2026 às 12:34",
+      "inicioMs": 1793115281950,
+      "eventos": [
+        {
+          "tipo": "almoco",
+          "id": "ev_1793122453752",
+          "motivo": "Almoço (-1.5h)",
+          "duracaoMs": 5400000,
+          "timestamp": "27/10/2026, 14:34:13",
+          "inicioMs": 1793122453752,
+          "fimMs": 1793127853752
+        },
+        {
+          "tipo": "cafe",
+          "timestamp": "27/10/2026, 16:20:27",
+          "id": "ev_1793128827280",
+          "fimMs": 1793129727280,
+          "motivo": "Café (-15m)",
+          "inicioMs": 1793128827280,
+          "duracaoMs": 900000
+        },
+        {
+          "id": "parada_1793182217960",
+          "fimMs": 1793190681611,
+          "duracaoMs": 8463651,
+          "motivo": "Iniciando máquinas e treinamento de zeramento do hibo",
+          "emAndamento": false,
+          "inicioMs": 1793182217960,
+          "tipo": "parada",
+          "timestamp": "28/10/2026, 07:10:17"
+        },
+        {
+          "fimMs": 1793191262535,
+          "emAndamento": false,
+          "id": "parada_1793191113509",
+          "duracaoMs": 149026,
+          "motivo": "Arrumando o TC12",
+          "inicioMs": 1793191113509,
+          "timestamp": "28/10/2026, 09:38:33",
+          "tipo": "parada"
+        },
+        {
+          "timestamp": "28/10/2026, 14:37:10",
+          "fimMs": 1793209079394,
+          "motivo": "Descontar 1,5 hr do almoço. Sumiu a opção no app",
+          "id": "parada_1793209030808",
+          "tipo": "parada",
+          "duracaoMs": 48586,
+          "inicioMs": 1793209030808,
+          "emAndamento": false
+        },
+        {
+          "fimMs": 1793270863143,
+          "duracaoMs": 2578131,
+          "inicioMs": 1793268285012,
+          "id": "parada_1793268285012",
+          "emAndamento": false,
+          "tipo": "parada",
+          "motivo": "Iniciando maquinas",
+          "timestamp": "29/10/2026, 07:04:45"
+        },
+        {
+          "tipo": "parada",
+          "emAndamento": false,
+          "inicioMs": 1793288203489,
+          "timestamp": "29/10/2026, 12:36:43",
+          "id": "parada_1793288203489",
+          "motivo": "Aguardando teste da engenharia",
+          "duracaoMs": 17216251,
+          "fimMs": 1793305419740
+        },
+        {
+          "fimMs": 1793306327212,
+          "inicioMs": 1793305427212,
+          "timestamp": "29/10/2026, 17:23:47",
+          "motivo": "Café (-15m)",
+          "duracaoMs": 900000,
+          "id": "ev_1793305427212",
+          "tipo": "cafe"
+        }
+      ],
+      "peca": "AL32012",
+      "rowId": "m_1793024157340",
+      "historico": [
+        "[27/10/2026 às 12:34] Início do setup",
+        "[14:34 às 16:04] Almoço (-1.5h)",
+        "[16:20 às 16:35] Café (-15 min)",
+        "[07:10 às 09:31] Parada (02:21:03): Iniciando máquinas e treinamento de zeramento do hibo",
+        "[09:38 às 09:41] Parada (00:02:29): Arrumando o TC12",
+        "[14:37 às 14:37] Parada (00:00:48): Descontar 1,5 hr do almoço. Sumiu a opção no app",
+        "[07:04 às 07:47] Parada (00:42:58): Iniciando maquinas",
+        "[12:36 às 17:23] Parada (04:46:56): Aguardando teste da engenharia",
+        "[17:23 às 17:38] Café (-15 min)"
+      ],
+      "prep1Val": "CAIO",
+      "paradaAtiva": false,
+      "deductionsMs": 35655645
+    }
+  },
+  "tarefas1": [
+    "GUARDAR PGMS E FOTOS DO MODELO ATUAL NA PASTA DRIVE CORRETA AO INICIAR O NOVO SETUP",
+    "VERIFICAR A NECESSIDADE DE LIMPAR O CAVACO (MATERIAL DIFERENTE)",
+    "TROCAR PINÇAS ALIMENTADOR",
+    "AJUSTAR APERTO DAS BUCHAS GUIAS",
+    "AJUSTAR PARAMETROS DO ALIMENTADOR"
+  ],
+  "concluidos": [
+    {
+      "timestamp": 1793279979701,
+      "prep1": "GABRIEL",
+      "data": "29/10/2026 às 10:19",
+      "historico": "[29/10/2026 às 07:43] Início do setup | [08:27 às 08:34] Parada (00:06:48): Pegando insertos e trocando parafuso da TCAP | [08:36 às 08:48] Parada (00:12:32): Ginástica | [10:19] Máquina liberada para produção (Início das pendências)",
+      "maquina": "TC0021",
+      "tempo": "02:17:04",
+      "peca": "CU2538E10",
+      "prep2": "GABRIEL",
+      "pendenciasConcluidas": false,
+      "modeloAnterior": "CU2537E10",
+      "id": "conc_1793279979701",
+      "pendenciasInicioMs": 1793279979701,
+      "tempoMs": 8224562,
+      "eventos": [
+        {
+          "timestamp": "29/10/2026, 08:27:18",
+          "fimMs": 1793273646230,
+          "tipo": "parada",
+          "id": "parada_1793273238226",
+          "emAndamento": false,
+          "inicioMs": 1793273238226,
+          "motivo": "Pegando insertos e trocando parafuso da TCAP",
+          "duracaoMs": 408004
+        },
+        {
+          "motivo": "Ginástica",
+          "inicioMs": 1793273779480,
+          "timestamp": "29/10/2026, 08:36:19",
+          "fimMs": 1793274531759,
+          "duracaoMs": 752279,
+          "emAndamento": false,
+          "tipo": "parada",
+          "id": "parada_1793273779480"
+        }
+      ]
+    },
+    {
+      "historico": "[26/10/2026 às 14:40] Início do setup | [17:09 às 17:09] Parada (00:00:13): Ajudando Bruno torno 13 10min | [07:44 às 12:14] Parada (04:29:12): Treinamento solidcam | [14:37 às 16:07] Almoço (-1.5h) | [16:00 às 16:15] Café (-15 min) | [16:04 às 16:21] Parada (00:16:30): Trocando expulsador | [16:29 às 16:37] Parada (00:08:42): Ajudando Bruno manutenção torno 7 | [16:52 às 17:12] Parada (00:19:38): Trocando broca de 4,5, estava reabrindo | [07:44 às 11:35] Parada (03:51:28): Treinamento CAM",
+      "tempoMs": 23039713,
+      "eventos": [
+        {
+          "emAndamento": false,
+          "tipo": "parada",
+          "fimMs": 1793045358196,
+          "timestamp": "26/10/2026, 17:09:05",
+          "inicioMs": 1793045345092,
+          "motivo": "Ajudando Bruno torno 13 10min",
+          "id": "parada_1793045345092",
+          "duracaoMs": 13104
+        },
+        {
+          "tipo": "parada",
+          "id": "parada_1793097895372",
+          "timestamp": "27/10/2026, 07:44:55",
+          "duracaoMs": 16152415,
+          "inicioMs": 1793097895372,
+          "motivo": "Treinamento solidcam",
+          "emAndamento": false,
+          "fimMs": 1793114047787
+        },
+        {
+          "fimMs": 1793128036536,
+          "duracaoMs": 5400000,
+          "tipo": "almoco",
+          "timestamp": "27/10/2026, 14:37:16",
+          "inicioMs": 1793122636536,
+          "id": "ev_1793122636536",
+          "motivo": "Almoço (-1.5h)"
+        },
+        {
+          "timestamp": "27/10/2026, 16:00:59",
+          "fimMs": 1793128559889,
+          "id": "ev_1793127659889",
+          "tipo": "cafe",
+          "inicioMs": 1793127659889,
+          "motivo": "Café (-15m)",
+          "duracaoMs": 900000
+        },
+        {
+          "id": "parada_1793127887614",
+          "emAndamento": false,
+          "inicioMs": 1793127887614,
+          "timestamp": "27/10/2026, 16:04:47",
+          "tipo": "parada",
+          "motivo": "Trocando expulsador",
+          "fimMs": 1793128878002,
+          "duracaoMs": 990388
+        },
+        {
+          "motivo": "Ajudando Bruno manutenção torno 7",
+          "duracaoMs": 522735,
+          "id": "parada_1793129356224",
+          "inicioMs": 1793129356224,
+          "emAndamento": false,
+          "fimMs": 1793129878959,
+          "tipo": "parada",
+          "timestamp": "27/10/2026, 16:29:16"
+        },
+        {
+          "timestamp": "27/10/2026, 16:52:38",
+          "tipo": "parada",
+          "emAndamento": false,
+          "id": "parada_1793130758429",
+          "motivo": "Trocando broca de 4,5, estava reabrindo",
+          "inicioMs": 1793130758429,
+          "fimMs": 1793131937271,
+          "duracaoMs": 1178842
+        },
+        {
+          "timestamp": "28/10/2026, 07:44:11",
+          "emAndamento": false,
+          "tipo": "parada",
+          "inicioMs": 1793184251215,
+          "id": "parada_1793184251215",
+          "motivo": "Treinamento CAM",
+          "fimMs": 1793198139763,
+          "duracaoMs": 13888548
+        }
+      ],
+      "modeloAnterior": "AL32003",
+      "peca": "AL32029",
+      "timestamp": 1793198143626,
+      "prep2": "GABRIEL",
+      "id": "conc_1793198143626",
+      "data": "28/10/2026 às 11:35",
+      "pendenciasConcluidas": true,
+      "tempo": "06:23:59",
+      "maquina": "TC09",
+      "prep1": "GABRIEL"
+    },
+    {
+      "eventos": [
+        {
+          "timestamp": "26/10/2026, 16:16:45",
+          "id": "ev_1793042205536",
+          "fimMs": 1793043105536,
+          "motivo": "Café (-15m)",
+          "inicioMs": 1793042205536,
+          "duracaoMs": 900000,
+          "tipo": "cafe"
+        },
+        {
+          "fimMs": 1793043577773,
+          "duracaoMs": 9768,
+          "inicioMs": 1793043568005,
+          "emAndamento": false,
+          "id": "parada_1793043568005",
+          "tipo": "parada",
+          "motivo": "Carlos tc06",
+          "timestamp": "26/10/2026, 16:39:28"
+        },
+        {
+          "duracaoMs": 37477,
+          "tipo": "parada",
+          "inicioMs": 1793043586452,
+          "emAndamento": false,
+          "motivo": "Trocar calço inserto",
+          "fimMs": 1793043623929,
+          "id": "parada_1793043586452",
+          "timestamp": "26/10/2026, 16:39:46"
+        },
+        {
+          "tipo": "parada",
+          "timestamp": "27/10/2026, 12:33:46",
+          "id": "parada_1793115226190",
+          "emAndamento": false,
+          "fimMs": 1793115491628,
+          "inicioMs": 1793115226190,
+          "duracaoMs": 265438,
+          "motivo": "Ajudar Bruno"
+        },
+        {
+          "inicioMs": 1793115502998,
+          "timestamp": "27/10/2026, 12:38:22",
+          "id": "parada_1793115502998",
+          "tipo": "parada",
+          "duracaoMs": 24717,
+          "motivo": "Mecher pgm e sincronismo",
+          "fimMs": 1793115527715,
+          "emAndamento": false
+        },
+        {
+          "timestamp": "27/10/2026, 14:30:17",
+          "motivo": "Almoço (-1.5h)",
+          "fimMs": 1793127617498,
+          "inicioMs": 1793122217498,
+          "id": "ev_1793122217498",
+          "duracaoMs": 5400000,
+          "tipo": "almoco"
+        },
+        {
+          "inicioMs": 1793122218869,
+          "timestamp": "27/10/2026, 14:30:18",
+          "fimMs": 1793122248286,
+          "emAndamento": false,
+          "tipo": "parada",
+          "motivo": "Descontar 45minutos conferir Mo-01",
+          "duracaoMs": 29417,
+          "id": "parada_1793122218869"
+        },
+        {
+          "duracaoMs": 954151,
+          "inicioMs": 1793122289862,
+          "id": "parada_1793122289862",
+          "fimMs": 1793123244013,
+          "emAndamento": false,
+          "motivo": "Ver. Marcos mo01 cota",
+          "timestamp": "27/10/2026, 14:31:29",
+          "tipo": "parada"
+        },
+        {
+          "tipo": "parada",
+          "id": "parada_1793195023427",
+          "motivo": "Várias paradas App apagou, paradas para afiar ferramenta de canal face, trocar ferramenta de rosca, aguardar Mo -01...trocar broca  4,50mm neste setup , foi feito ensinando e relembrando Caio as etapas",
+          "timestamp": "28/10/2026, 10:43:43",
+          "emAndamento": false,
+          "inicioMs": 1793195023427,
+          "duracaoMs": 161402,
+          "fimMs": 1793195184829
+        }
+      ],
+      "tempoMs": 50874062,
+      "prep1": "CAIO",
+      "pendenciasInicioMs": 1793195192162,
+      "historico": "[26/10/2026 às 14:48] Início do setup | [16:16 às 16:31] Café (-15 min) | [16:39 às 16:39] Parada (00:00:09): Carlos tc06 | [16:39 às 16:40] Parada (00:00:37): Trocar calço inserto | [12:33 às 12:38] Parada (00:04:25): Ajudar Bruno | [12:38 às 12:38] Parada (00:00:24): Mecher pgm e sincronismo | [14:30 às 16:00] Almoço (-1.5h) | [14:30 às 14:30] Parada (00:00:29): Descontar 45minutos conferir Mo-01 | [14:31 às 14:47] Parada (00:15:54): Ver. Marcos mo01 cota | [10:43 às 10:46] Parada (00:02:41): Várias paradas App apagou, paradas para afiar ferramenta de canal face, trocar ferramenta de rosca, aguardar Mo -01...trocar broca  4,50mm neste setup , foi feito ensinando e relembrando Caio as etapas | [10:46] Máquina liberada para produção (Início das pendências)",
+      "data": "28/10/2026 às 10:46",
+      "tempo": "14:07:54",
+      "id": "conc_1793195192162",
+      "timestamp": 1793195192162,
+      "maquina": "TC18",
+      "modeloAnterior": "AL32501",
+      "prep2": "IGOR",
+      "peca": "AL32028",
+      "tempoPendenciasFormatado": "21:27:30",
+      "pendenciasConcluidas": true,
+      "tempoPendenciasMs": 77250823
+    },
+    {
+      "prep2": "GABRIEL",
+      "historico": "[23/10/2026 às 10:39] Início do setup | [12:33 às 12:36] Parada (00:03:19): Trocando parafusos da capa do head 2 | [14:34 às 16:04] Almoço (-1.5h)",
+      "modeloAnterior": "PC11279",
+      "timestamp": 1792778196980,
+      "data": "23/10/2026 às 14:56",
+      "maquina": "TC08",
+      "prep1": "GABRIEL",
+      "peca": "PL1106",
+      "tempoMs": 9835154,
+      "eventos": [
+        {
+          "tipo": "parada",
+          "timestamp": "23/10/2026, 12:33:25",
+          "fimMs": 1792769805653,
+          "motivo": "Trocando parafusos da capa do head 2",
+          "id": "parada_1792769605802",
+          "duracaoMs": 199851,
+          "emAndamento": false,
+          "inicioMs": 1792769605802
+        },
+        {
+          "duracaoMs": 5400000,
+          "fimMs": 1792782263044,
+          "inicioMs": 1792776863044,
+          "tipo": "almoco",
+          "motivo": "Almoço (-1.5h)",
+          "timestamp": "23/10/2026, 14:34:23",
+          "id": "ev_1792776863044"
+        }
+      ],
+      "id": "conc_1792778196980",
+      "pendenciasConcluidas": true,
+      "tempo": "02:43:55"
+    },
+    {
+      "tempo": "06:45:25",
+      "tempoMs": 24325598,
+      "eventos": [
+        {
+          "tipo": "parada",
+          "emAndamento": false,
+          "id": "parada_1792671891068",
+          "duracaoMs": 15879,
+          "timestamp": "22/10/2026, 09:24:51",
+          "motivo": "Ajudar Fabiao tc 11",
+          "inicioMs": 1792671891068,
+          "fimMs": 1792671906947
+        },
+        {
+          "id": "ev_1792690227995",
+          "duracaoMs": 5400000,
+          "inicioMs": 1792690227995,
+          "timestamp": "22/10/2026, 14:30:27",
+          "motivo": "Almoço (-1.5h)",
+          "tipo": "almoco",
+          "fimMs": 1792695627995
+        },
+        {
+          "motivo": "Aguardar medir cotas MO-01",
+          "inicioMs": 1792697011990,
+          "timestamp": "22/10/2026, 16:23:31",
+          "tipo": "parada",
+          "duracaoMs": 2569940,
+          "id": "parada_1792697011990",
+          "fimMs": 1792699581930,
+          "emAndamento": false
+        },
+        {
+          "fimMs": 1792753732843,
+          "inicioMs": 1792753713484,
+          "duracaoMs": 19359,
+          "motivo": "Iniciando setup as 08:10",
+          "timestamp": "23/10/2026, 08:08:33",
+          "emAndamento": false,
+          "id": "parada_1792753713484",
+          "tipo": "parada"
+        },
+        {
+          "duracaoMs": 2583657,
+          "inicioMs": 1792753758969,
+          "fimMs": 1792756342626,
+          "emAndamento": false,
+          "tipo": "parada",
+          "timestamp": "23/10/2026, 08:09:18",
+          "id": "parada_1792753758969",
+          "motivo": "Trocar broca e pinça furo ruim, fora de media"
+        }
+      ],
+      "data": "23/10/2026 às 08:52",
+      "prep1": "IGOR",
+      "id": "conc_1792756357264",
+      "historico": "[22/10/2026 às 09:20] Início do setup | [09:24 às 09:25] Parada (00:00:15): Ajudar Fabiao tc 11 | [14:30 às 16:00] Almoço (-1.5h) | [16:23 às 17:06] Parada (00:42:49): Aguardar medir cotas MO-01 | [08:08 às 08:08] Parada (00:00:19): Iniciando setup as 08:10 | [08:09 às 08:52] Parada (00:43:03): Trocar broca e pinça furo ruim, fora de media",
+      "modeloAnterior": "AL32016",
+      "maquina": "TC16",
+      "timestamp": 1792756357264,
+      "pendenciasConcluidas": true,
+      "prep2": "IGOR",
+      "peca": "AL32023"
+    },
+    {
+      "tempoMs": 11691400,
+      "eventos": [
+        {
+          "timestamp": "22/10/2026, 14:34:38",
+          "tipo": "almoco",
+          "id": "ev_1792690478819",
+          "motivo": "Almoço (-1.5h)",
+          "fimMs": 1792695878819,
+          "inicioMs": 1792690478819,
+          "duracaoMs": 5400000
+        },
+        {
+          "duracaoMs": 2862957,
+          "inicioMs": 1792693131140,
+          "tipo": "parada",
+          "emAndamento": false,
+          "motivo": "Aguardando medidas da máquina optica",
+          "fimMs": 1792695994097,
+          "id": "parada_1792693131140",
+          "timestamp": "22/10/2026, 15:18:51"
+        }
+      ],
+      "prep1": "GABRIEL",
+      "peca": "BD1152",
+      "pendenciasConcluidas": true,
+      "tempo": "03:14:51",
+      "maquina": "TC12",
+      "prep2": "GABRIEL",
+      "timestamp": 1792696005944,
+      "historico": "[22/10/2026 às 10:34] Início do setup | [14:34 às 16:04] Almoço (-1.5h) | [15:18 às 16:06] Parada (00:47:42): Aguardando medidas da máquina optica",
+      "id": "conc_1792696005944",
+      "data": "22/10/2026 às 16:06",
+      "modeloAnterior": "FURAR CORPO"
+    },
+    {
+      "modeloAnterior": "CU2523",
+      "id": "conc_1792669442404",
+      "peca": "CU2537E10",
+      "maquina": "TC21",
+      "prep2": "GABRIEL",
+      "tempo": "08:42:02",
+      "data": "22/10/2026 às 08:44",
+      "pendenciasConcluidas": true,
+      "timestamp": 1792669442404,
+      "tempoMs": 31322652,
+      "eventos": [
+        {
+          "motivo": "Pegando chave pra soltar pinça do vdi",
+          "tipo": "parada",
+          "timestamp": "21/10/2026, 10:39:00",
+          "duracaoMs": 133963,
+          "emAndamento": false,
+          "id": "parada_1792589940514",
+          "inicioMs": 1792589940514,
+          "fimMs": 1792590074477
+        },
+        {
+          "id": "parada_1792590867980",
+          "timestamp": "21/10/2026, 10:54:27",
+          "fimMs": 1792591740971,
+          "tipo": "parada",
+          "emAndamento": false,
+          "inicioMs": 1792590867980,
+          "motivo": "Suporte da ccmt muito longo, não dava pra por no balanço correto, tive que pegar outro e trocar o parafuso tambem",
+          "duracaoMs": 872991
+        },
+        {
+          "motivo": "Almoço (-1.5h)",
+          "id": "ev_1792606920359",
+          "duracaoMs": 5400000,
+          "tipo": "almoco",
+          "timestamp": "21/10/2026, 15:22:00",
+          "inicioMs": 1792606920359,
+          "fimMs": 1792612320359
+        },
+        {
+          "duracaoMs": 17063,
+          "motivo": "Descontar 1hr de treinamento do 8S",
+          "inicioMs": 1792606933890,
+          "tipo": "parada",
+          "emAndamento": false,
+          "fimMs": 1792606950953,
+          "id": "parada_1792606933890",
+          "timestamp": "21/10/2026, 15:22:13"
+        },
+        {
+          "fimMs": 1792610246965,
+          "motivo": "Café (-15m)",
+          "timestamp": "21/10/2026, 16:02:26",
+          "duracaoMs": 900000,
+          "id": "ev_1792609346965",
+          "tipo": "cafe",
+          "inicioMs": 1792609346965
+        }
+      ],
+      "historico": "[21/10/2026 às 08:09] Início do setup | [10:39 às 10:41] Parada (00:02:13): Pegando chave pra soltar pinça do vdi | [10:54 às 11:09] Parada (00:14:32): Suporte da ccmt muito longo, não dava pra por no balanço correto, tive que pegar outro e trocar o parafuso tambem | [15:22 às 16:52] Almoço (-1.5h) | [15:22 às 15:22] Parada (00:00:17): Descontar 1hr de treinamento do 8S | [16:02 às 16:17] Café (-15 min)",
+      "prep1": "GABRIEL"
+    },
+    {
+      "prep2": "MILLER",
+      "data": "22/10/2026 às 07:15",
+      "tempoMs": 1390099,
+      "eventos": [],
+      "modeloAnterior": "CU2531",
+      "historico": "[21/10/2026 às 17:02] Início do setup",
+      "id": "conc_1792664158210",
+      "prep1": "MILLER",
+      "pendenciasConcluidas": true,
+      "maquina": "TC12",
+      "timestamp": 1792664158210,
+      "tempo": "00:23:10",
+      "peca": "CU2562E20 FURAR TRYOUT"
+    },
+    {
+      "data": "21/10/2026 às 10:57",
+      "tempo": "04:04:00",
+      "eventos": [
+        {
+          "tipo": "cafe",
+          "timestamp": "20/10/2026, 16:57:58",
+          "id": "ev_1792526278537",
+          "inicioMs": 1792526278537,
+          "motivo": "Café (-15m)",
+          "duracaoMs": 900000,
+          "fimMs": 1792527178537
+        },
+        {
+          "inicioMs": 1792577412549,
+          "fimMs": 1792579958616,
+          "id": "parada_1792577412549",
+          "duracaoMs": 2546067,
+          "timestamp": "21/10/2026, 07:10:12",
+          "tipo": "parada",
+          "motivo": "Iniciando máquinas",
+          "emAndamento": false
+        },
+        {
+          "emAndamento": false,
+          "duracaoMs": 2256917,
+          "inicioMs": 1792588772324,
+          "id": "parada_1792588772324",
+          "tipo": "parada",
+          "fimMs": 1792591029241,
+          "timestamp": "21/10/2026, 10:19:32",
+          "motivo": "Arrumando o programa"
+        }
+      ],
+      "tempoMs": 14640526,
+      "pendenciasConcluidas": true,
+      "prep1": "CAIO",
+      "historico": "[20/10/2026 às 15:28] Início do setup | [16:57 às 17:12] Café (-15 min) | [07:10 às 07:52] Parada (00:42:26): Iniciando máquinas | [10:19 às 10:57] Parada (00:37:36): Arrumando o programa",
+      "maquina": "TC17",
+      "peca": "PC11103",
+      "id": "conc_1792591054384",
+      "timestamp": 1792591054384,
+      "modeloAnterior": "PL11102",
+      "prep2": "CAIO"
+    },
+    {
+      "historico": "[20/10/2026 às 11:14] Início do setup | [14:35 às 16:05] Almoço (-1.5h) | [16:03 às 16:18] Café (-15 min) | [16:03 às 16:04] Parada (00:00:30): Ajustar pgm cota F1 | [16:04 às 16:05] Parada (00:00:58): Trocar brocas 3,60..",
+      "id": "conc_1792525572296",
+      "timestamp": 1792525572296,
+      "eventos": [
+        {
+          "id": "ev_1792517710425",
+          "fimMs": 1792523110425,
+          "duracaoMs": 5400000,
+          "tipo": "almoco",
+          "motivo": "Almoço (-1.5h)",
+          "timestamp": "20/10/2026, 14:35:10",
+          "inicioMs": 1792517710425
+        },
+        {
+          "duracaoMs": 900000,
+          "id": "ev_1792522986168",
+          "tipo": "cafe",
+          "motivo": "Café (-15m)",
+          "fimMs": 1792523886168,
+          "timestamp": "20/10/2026, 16:03:06",
+          "inicioMs": 1792522986168
+        },
+        {
+          "motivo": "Ajustar pgm cota F1",
+          "emAndamento": false,
+          "id": "parada_1792523013782",
+          "inicioMs": 1792523013782,
+          "timestamp": "20/10/2026, 16:03:33",
+          "tipo": "parada",
+          "fimMs": 1792523044463,
+          "duracaoMs": 30681
+        },
+        {
+          "inicioMs": 1792523048039,
+          "timestamp": "20/10/2026, 16:04:08",
+          "emAndamento": false,
+          "duracaoMs": 58814,
+          "motivo": "Trocar brocas 3,60..",
+          "id": "parada_1792523048039",
+          "fimMs": 1792523106853,
+          "tipo": "parada"
+        }
+      ],
+      "tempoMs": 13521587,
+      "prep2": "IGOR",
+      "peca": "AL32501",
+      "modeloAnterior": "AL32500",
+      "tempo": "03:45:21",
+      "data": "20/10/2026 às 16:46",
+      "pendenciasConcluidas": true,
+      "maquina": "TC18",
+      "prep1": "IGOR"
+    },
+    {
+      "prep2": "GABRIEL",
+      "modeloAnterior": "BU11351",
+      "tempoMs": 39047652,
+      "eventos": [
+        {
+          "duracaoMs": 1494481,
+          "fimMs": 1792154288678,
+          "motivo": "Usinando chanfro na ponta da barra, chanfro que estava na barra não deu certo",
+          "emAndamento": false,
+          "id": "parada_1792152794197",
+          "tipo": "parada",
+          "inicioMs": 1792152794197,
+          "timestamp": "16/10/2026, 09:13:14"
+        },
+        {
+          "timestamp": "16/10/2026, 14:43:57",
+          "motivo": "Almoço (-1.5h)",
+          "id": "ev_1792172637160",
+          "duracaoMs": 5400000,
+          "fimMs": 1792178037160,
+          "inicioMs": 1792172637160,
+          "tipo": "almoco"
+        },
+        {
+          "fimMs": 1792172853449,
+          "timestamp": "16/10/2026, 14:43:59",
+          "id": "parada_1792172639188",
+          "motivo": "Finalizando peça do rev 2 do index t18",
+          "tipo": "parada",
+          "emAndamento": false,
+          "inicioMs": 1792172639188,
+          "duracaoMs": 214261
+        },
+        {
+          "motivo": "Alterações no pgm na parte do sextavado",
+          "timestamp": "16/10/2026, 15:33:47",
+          "id": "parada_1792175627963",
+          "inicioMs": 1792175627963,
+          "emAndamento": false,
+          "fimMs": 1792177569193,
+          "tipo": "parada",
+          "duracaoMs": 1941230
+        },
+        {
+          "duracaoMs": 640723,
+          "fimMs": 1792180408195,
+          "id": "parada_1792179767472",
+          "tipo": "parada",
+          "motivo": "Alterações gerais no pgm",
+          "timestamp": "16/10/2026, 16:42:47",
+          "inicioMs": 1792179767472,
+          "emAndamento": false
+        },
+        {
+          "timestamp": "19/10/2026, 09:34:43",
+          "tipo": "parada",
+          "fimMs": 1792413353860,
+          "id": "parada_1792413283539",
+          "inicioMs": 1792413283539,
+          "duracaoMs": 70321,
+          "emAndamento": false,
+          "motivo": "Treinamento de manhã, ligando máquinas e atualizando vida útil, vim pro setup agora 09:35h"
+        },
+        {
+          "tipo": "parada",
+          "emAndamento": false,
+          "fimMs": 1792425332123,
+          "duracaoMs": 11708783,
+          "timestamp": "19/10/2026, 09:40:23",
+          "id": "parada_1792413623340",
+          "inicioMs": 1792413623340,
+          "motivo": "Alterações no pgm, inclusão de chanfros, broca de 1mm, broca reta de 7mm, alterações no acabamento interno, rosca"
+        },
+        {
+          "inicioMs": 1792431538782,
+          "timestamp": "19/10/2026, 14:38:58",
+          "motivo": ".",
+          "duracaoMs": 5105,
+          "fimMs": 1792431543887,
+          "id": "parada_1792431538782",
+          "tipo": "parada",
+          "emAndamento": false
+        },
+        {
+          "motivo": "Não consegui lançar 1:30h do almoço",
+          "id": "parada_1792432442791",
+          "timestamp": "19/10/2026, 14:54:02",
+          "inicioMs": 1792432442791,
+          "tipo": "parada",
+          "duracaoMs": 22156,
+          "fimMs": 1792432464947,
+          "emAndamento": false
+        },
+        {
+          "timestamp": "19/10/2026, 14:54:41",
+          "tipo": "parada",
+          "id": "parada_1792432481935",
+          "inicioMs": 1792432481935,
+          "emAndamento": false,
+          "motivo": "Aguardando Victor testar a peça",
+          "fimMs": 1792434968146,
+          "duracaoMs": 2486211
+        }
+      ],
+      "id": "conc_1792434972758",
+      "data": "19/10/2026 às 15:36",
+      "prep1": "IGOR",
+      "maquina": "TC09",
+      "historico": "[16/10/2026 às 08:15] Início do setup | [09:13 às 09:38] Parada (00:24:54): Usinando chanfro na ponta da barra, chanfro que estava na barra não deu certo | [14:43 às 16:13] Almoço (-1.5h) | [14:43 às 14:47] Parada (00:03:34): Finalizando peça do rev 2 do index t18 | [15:33 às 16:06] Parada (00:32:21): Alterações no pgm na parte do sextavado | [16:42 às 16:53] Parada (00:10:40): Alterações gerais no pgm | [09:34 às 09:35] Parada (00:01:10): Treinamento de manhã, ligando máquinas e atualizando vida útil, vim pro setup agora 09:35h | [09:40 às 12:55] Parada (03:15:08): Alterações no pgm, inclusão de chanfros, broca de 1mm, broca reta de 7mm, alterações no acabamento interno, rosca | [14:38 às 14:39] Parada (00:00:05): . | [14:54 às 14:54] Parada (00:00:22): Não consegui lançar 1:30h do almoço | [14:54 às 15:36] Parada (00:41:26): Aguardando Victor testar a peça",
+      "peca": "AL32003",
+      "pendenciasConcluidas": true,
+      "timestamp": 1792434972758,
+      "tempo": "10:50:47"
+    },
+    {
+      "modeloAnterior": "AL32502",
+      "pendenciasConcluidas": true,
+      "data": "16/10/2026 às 15:09",
+      "prep2": "IGOR",
+      "eventos": [
+        {
+          "duracaoMs": 6699,
+          "inicioMs": 1792161503626,
+          "emAndamento": false,
+          "motivo": "Teste",
+          "id": "parada_1792161503626",
+          "fimMs": 1792161510325,
+          "timestamp": "16/10/2026, 11:38:23",
+          "tipo": "parada"
+        },
+        {
+          "id": "parada_1792162232485",
+          "tipo": "parada",
+          "fimMs": 1792163074104,
+          "duracaoMs": 841619,
+          "inicioMs": 1792162232485,
+          "timestamp": "16/10/2026, 11:50:32",
+          "emAndamento": false,
+          "motivo": "Maq. Deu alarme novamente.."
+        },
+        {
+          "motivo": "Almoço (-1.5h)",
+          "id": "ev_1792171812366",
+          "duracaoMs": 5400000,
+          "fimMs": 1792177212366,
+          "timestamp": "16/10/2026, 14:30:12",
+          "tipo": "almoco",
+          "inicioMs": 1792171812366
+        },
+        {
+          "id": "parada_1792172940932",
+          "timestamp": "16/10/2026, 14:49:00",
+          "motivo": "Verificando marca de pinça Gabriel",
+          "duracaoMs": 399926,
+          "fimMs": 1792173340858,
+          "inicioMs": 1792172940932,
+          "tipo": "parada",
+          "emAndamento": false
+        },
+        {
+          "timestamp": "16/10/2026, 15:06:41",
+          "fimMs": 1792174132785,
+          "tipo": "parada",
+          "emAndamento": false,
+          "motivo": "Óleo solúvel muito contaminado, assim perdendo muito tempo limpado vidro da máquina com ar para ver. Ferr. (Miller ciente)",
+          "id": "parada_1792174001256",
+          "duracaoMs": 131529,
+          "inicioMs": 1792174001256
+        }
+      ],
+      "tempoMs": 5896425,
+      "id": "conc_1792174149213",
+      "historico": "[16/10/2026 às 11:37] Início do setup | [11:38 às 11:38] Parada (00:00:06): Teste | [11:50 às 12:04] Parada (00:14:01): Maq. Deu alarme novamente.. | [14:30 às 16:00] Almoço (-1.5h) | [14:49 às 14:55] Parada (00:06:39): Verificando marca de pinça Gabriel | [15:06 às 15:08] Parada (00:02:11): Óleo solúvel muito contaminado, assim perdendo muito tempo limpado vidro da máquina com ar para ver. Ferr. (Miller ciente)",
+      "prep1": "IGOR",
+      "timestamp": 1792174149213,
+      "tempo": "01:38:16",
+      "maquina": "TC16",
+      "peca": "AL32016"
+    },
+    {
+      "maquina": "TC17",
+      "prep2": "GABRIEL",
+      "historico": "[15/10/2026 às 08:42] Início do setup | [12:03 às 12:06] Parada (00:03:27): Troca de broca helicoidal de 7mm do head 2, a 1° reabriu mais de 0.3mm da medida certa | [12:28 às 12:32] Parada (00:04:10): Trocando broca helicoidal de 7mm do head 2, a reserva também reabriu o furo | [12:32 às 12:37] Parada (00:05:20): Trocando FRESA de topo do head 2 pra ver se some a recarga do sextavado | [16:20 às 16:22] Parada (00:01:53): Encerrei o setup as 15:45h e o app bugou, e tbm não apontou o tempo que fiquei aguardando o Marcos medirmas cotas na maquina optica",
+      "data": "15/10/2026 às 16:22",
+      "pendenciasConcluidas": true,
+      "timestamp": 1792092145162,
+      "tempoMs": 18287000,
+      "eventos": [
+        {
+          "motivo": "Troca de broca helicoidal de 7mm do head 2, a 1° reabriu mais de 0.3mm da medida certa",
+          "timestamp": "15/10/2026, 12:03:21",
+          "fimMs": 1792076809370,
+          "tipo": "parada",
+          "inicioMs": 1792076601929,
+          "emAndamento": false,
+          "id": "parada_1792076601929",
+          "duracaoMs": 207441
+        },
+        {
+          "motivo": "Trocando broca helicoidal de 7mm do head 2, a reserva também reabriu o furo",
+          "tipo": "parada",
+          "inicioMs": 1792078082886,
+          "duracaoMs": 250408,
+          "timestamp": "15/10/2026, 12:28:02",
+          "emAndamento": false,
+          "id": "parada_1792078082886",
+          "fimMs": 1792078333294
+        },
+        {
+          "emAndamento": false,
+          "fimMs": 1792078656976,
+          "inicioMs": 1792078336028,
+          "timestamp": "15/10/2026, 12:32:16",
+          "tipo": "parada",
+          "duracaoMs": 320948,
+          "id": "parada_1792078336028",
+          "motivo": "Trocando FRESA de topo do head 2 pra ver se some a recarga do sextavado"
+        },
+        {
+          "duracaoMs": 113497,
+          "inicioMs": 1792092013965,
+          "fimMs": 1792092127462,
+          "motivo": "Encerrei o setup as 15:45h e o app bugou, e tbm não apontou o tempo que fiquei aguardando o Marcos medirmas cotas na maquina optica",
+          "emAndamento": false,
+          "id": "parada_1792092013965",
+          "tipo": "parada",
+          "timestamp": "15/10/2026, 16:20:13"
+        }
+      ],
+      "id": "conc_1792092145162",
+      "prep1": "CAIO",
+      "modeloAnterior": "BR1152",
+      "tempo": "05:04:47",
+      "peca": "PL11102"
+    },
+    {
+      "modeloAnterior": "AB119030",
+      "data": "14/10/2026 às 16:44",
+      "id": "conc_1792007054610",
+      "pendenciasConcluidas": true,
+      "prep2": "GABRIEL",
+      "tempoMs": 27277656,
+      "eventos": [
+        {
+          "emAndamento": false,
+          "timestamp": "13/10/2026, 15:20:56",
+          "id": "parada_1791915656133",
+          "tipo": "parada",
+          "motivo": "Procurando chave fixa 22mm",
+          "fimMs": 1791915947918,
+          "inicioMs": 1791915656133,
+          "duracaoMs": 291785
+        },
+        {
+          "motivo": "Trocando adaptador da pinça do alimentador, rosca ruim",
+          "timestamp": "13/10/2026, 15:27:50",
+          "tipo": "parada",
+          "fimMs": 1791916871782,
+          "duracaoMs": 801440,
+          "inicioMs": 1791916070342,
+          "emAndamento": false,
+          "id": "parada_1791916070342"
+        },
+        {
+          "fimMs": 1791919359023,
+          "id": "ev_1791918459023",
+          "timestamp": "13/10/2026, 16:07:39",
+          "motivo": "Café (-15m)",
+          "inicioMs": 1791918459023,
+          "tipo": "cafe",
+          "duracaoMs": 900000
+        },
+        {
+          "inicioMs": 1791918460989,
+          "timestamp": "13/10/2026, 16:07:40",
+          "motivo": ".",
+          "duracaoMs": 3624,
+          "tipo": "parada",
+          "fimMs": 1791918464613,
+          "id": "parada_1791918460989",
+          "emAndamento": false
+        },
+        {
+          "emAndamento": false,
+          "id": "parada_1791919466271",
+          "inicioMs": 1791919466271,
+          "timestamp": "13/10/2026, 16:24:26",
+          "tipo": "parada",
+          "duracaoMs": 1302181,
+          "motivo": "Secando chão, durante a chuva caiu água encima do alimentador e no chão",
+          "fimMs": 1791920768452
+        },
+        {
+          "fimMs": 1791977561976,
+          "motivo": "1° expulsador que coloquei não deu certo, tive que trocar",
+          "duracaoMs": 530743,
+          "timestamp": "14/10/2026, 08:23:51",
+          "emAndamento": false,
+          "tipo": "parada",
+          "inicioMs": 1791977031233,
+          "id": "parada_1791977031233"
+        },
+        {
+          "tipo": "parada",
+          "inicioMs": 1791986014563,
+          "id": "parada_1791986014563",
+          "fimMs": 1791986038643,
+          "timestamp": "14/10/2026, 10:53:34",
+          "duracaoMs": 24080,
+          "emAndamento": false,
+          "motivo": "Testev4"
+        },
+        {
+          "inicioMs": 1791986046059,
+          "id": "parada_1791986046059",
+          "fimMs": 1791986049601,
+          "timestamp": "14/10/2026, 10:54:06",
+          "tipo": "parada",
+          "duracaoMs": 3542,
+          "motivo": "Y",
+          "emAndamento": false
+        },
+        {
+          "inicioMs": 1791988613581,
+          "fimMs": 1791988706319,
+          "emAndamento": false,
+          "timestamp": "14/10/2026, 11:36:53",
+          "id": "parada_1791988613581",
+          "duracaoMs": 92738,
+          "motivo": "1° vez que faz essa peça nesse torno",
+          "tipo": "parada"
+        },
+        {
+          "fimMs": 1792004506810,
+          "timestamp": "14/10/2026, 14:31:46",
+          "motivo": "Almoço (-1.5h)",
+          "id": "ev_1791999106810",
+          "inicioMs": 1791999106810,
+          "duracaoMs": 5400000,
+          "tipo": "almoco"
+        },
+        {
+          "inicioMs": 1791999634398,
+          "motivo": "Chamei o Victor pra ver alguns detalhes na peça",
+          "tipo": "parada",
+          "emAndamento": false,
+          "timestamp": "14/10/2026, 14:40:34",
+          "id": "parada_1791999634398",
+          "duracaoMs": 3058370,
+          "fimMs": 1792002692768
+        },
+        {
+          "id": "parada_1792004947079",
+          "tipo": "parada",
+          "fimMs": 1792006616247,
+          "motivo": "Alterando FRESA e ferramenta do canal, Victor não aprovou do jeito que estava",
+          "duracaoMs": 1669168,
+          "emAndamento": false,
+          "timestamp": "14/10/2026, 16:09:07",
+          "inicioMs": 1792004947079
+        },
+        {
+          "timestamp": "14/10/2026, 16:09:13",
+          "tipo": "cafe",
+          "fimMs": 1792005853891,
+          "inicioMs": 1792004953891,
+          "id": "ev_1792004953891",
+          "motivo": "Café (-15m)",
+          "duracaoMs": 900000
+        },
+        {
+          "fimMs": 1792007047753,
+          "motivo": "Aguardando Victor vir conferir outra peça atualizada",
+          "timestamp": "14/10/2026, 16:37:00",
+          "id": "parada_1792006620930",
+          "emAndamento": false,
+          "duracaoMs": 426823,
+          "inicioMs": 1792006620930,
+          "tipo": "parada"
+        }
+      ],
+      "timestamp": 1792007054610,
+      "tempo": "07:34:37",
+      "historico": "[13/10/2026 às 15:02] Início do setup | [15:20 às 15:25] Parada (00:04:51): Procurando chave fixa 22mm | [15:27 às 15:41] Parada (00:13:21): Trocando adaptador da pinça do alimentador, rosca ruim | [16:07 às 16:22] Café (-15 min) | [16:07 às 16:07] Parada (00:00:03): . | [16:24 às 16:46] Parada (00:21:42): Secando chão, durante a chuva caiu água encima do alimentador e no chão | [08:23 às 08:32] Parada (00:08:50): 1° expulsador que coloquei não deu certo, tive que trocar | [10:53 às 10:53] Parada (00:00:24): Testev4 | [10:54 às 10:54] Parada (00:00:03): Y | [11:36 às 11:38] Parada (00:01:32): 1° vez que faz essa peça nesse torno | [14:31 às 16:01] Almoço (-1.5h) | [14:40 às 15:31] Parada (00:50:58): Chamei o Victor pra ver alguns detalhes na peça | [16:09 às 16:24] Café (-15 min) | [16:09 às 16:36] Parada (00:27:49): Alterando FRESA e ferramenta do canal, Victor não aprovou do jeito que estava | [16:37 às 16:44] Parada (00:07:06): Aguardando Victor vir conferir outra peça atualizada",
+      "prep1": "GABRIEL",
+      "peca": "AL132008",
+      "maquina": "TC14"
+    },
+    {
+      "data": "14/10/2026 às 16:31",
+      "prep2": "IGOR",
+      "historico": "[13/10/2026 às 12:12] Início do setup | [15:03 às 15:03] Parada (00:00:10): Teste | [15:06 às 15:07] Parada (00:01:01): Esta sendo usado o outro aplicativo | [15:14 às 15:15] Parada (00:00:33): Teste",
+      "modeloAnterior": "PLUG 8,8",
+      "tempoMs": 34560000,
+      "eventos": [
+        {
+          "duracaoMs": 10113,
+          "emAndamento": false,
+          "inicioMs": 1791914610531,
+          "id": "parada_1791914610531",
+          "motivo": "Teste",
+          "fimMs": 1791914620644,
+          "tipo": "parada",
+          "timestamp": "13/10/2026, 15:03:30"
+        },
+        {
+          "tipo": "parada",
+          "emAndamento": false,
+          "fimMs": 1791914845486,
+          "duracaoMs": 61483,
+          "timestamp": "13/10/2026, 15:06:24",
+          "id": "parada_1791914784003",
+          "inicioMs": 1791914784003,
+          "motivo": "Esta sendo usado o outro aplicativo"
+        },
+        {
+          "fimMs": 1791915321056,
+          "emAndamento": false,
+          "id": "parada_1791915287245",
+          "timestamp": "13/10/2026, 15:14:47",
+          "duracaoMs": 33811,
+          "inicioMs": 1791915287245,
+          "motivo": "Teste",
+          "tipo": "parada"
+        }
+      ],
+      "timestamp": 1792006296557,
+      "id": "conc_1792006296557",
+      "prep1": "IGOR",
+      "pendenciasConcluidas": true,
+      "tempo": "09:36:00",
+      "maquina": "TC08",
+      "peca": "PC11279"
+    },
+    {
+      "eventos": [
+        {
+          "emAndamento": false,
+          "fimMs": 1791895363099,
+          "id": "parada_1791895351053",
+          "motivo": "TER",
+          "duracaoMs": 12053,
+          "tipo": "parada",
+          "timestamp": "13/10/2026, 09:42:31",
+          "inicioMs": 1791895351046
+        },
+        {
+          "duracaoMs": 11738,
+          "fimMs": 1791896021530,
+          "motivo": "TESTE 2",
+          "emAndamento": false,
+          "timestamp": "13/10/2026, 09:53:29",
+          "inicioMs": 1791896009792,
+          "id": "parada_1791896009792",
+          "tipo": "parada"
+        }
+      ],
+      "tempoMs": 11444034,
+      "timestamp": 1791904278791,
+      "modeloAnterior": "13138",
+      "prep1": "IGOR",
+      "historico": "[13/10/2026 às 09:00] Início do setup | [09:42 às 09:42] Parada (00:00:12): TER | [09:53 às 09:53] Parada (00:00:11): TESTE 2",
+      "tempo": "03:10:44",
+      "peca": "BD1150",
+      "maquina": "TC10",
+      "pendenciasConcluidas": true,
+      "data": "13/10/2026 às 12:11",
+      "prep2": "IGOR",
+      "id": "conc_1791904278791"
+    },
+    {
+      "modeloAnterior": "PC1131",
+      "tempo": "02:32:42",
+      "eventos": [
+        {
+          "timestamp": "08/10/2026, 09:32:23",
+          "inicioMs": 1791462743855,
+          "fimMs": 1791464948903,
+          "id": "parada_1791462743863",
+          "motivo": "TESTE",
+          "tipo": "parada",
+          "duracaoMs": 2205048,
+          "emAndamento": false
+        }
+      ],
+      "tempoMs": 9162000,
+      "prep1": "CAIO",
+      "data": "08/10/2026 às 10:09",
+      "id": "conc_1791464969037",
+      "peca": "PC2001",
+      "historico": "[07/10/2026 às 17:07] Início do setup | [08/10/2026, 09:32:23] Parada iniciada: Parada em andamento | [09:32 às 10:09] Parada (00:36:45): TESTE",
+      "maquina": "TC11",
+      "pendenciasConcluidas": true,
+      "prep2": "CAIO",
+      "timestamp": 1791464969037
+    }
+  ],
+  "preparadores": [
+    "GABRIEL",
+    "CAIO",
+    "IGOR",
+    "MILLER"
+  ]
 }

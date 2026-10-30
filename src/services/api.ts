@@ -1,8 +1,7 @@
-import type { StoreData, SetupAtivo, TurnoConfig, GoogleSheetConfig, SetupConcluido, Maquina, ParadaEvento } from '../types';
+import type { StoreData, SetupAtivo, TurnoConfig, GoogleSheetConfig, SetupConcluido, Maquina } from '../types';
 import { FirebaseService } from './firebase';
-import { calcularTempoValidoTurno } from '../utils/turno';
 
-const STORAGE_KEY = 'setup_interno_local_cache';
+const STORAGE_KEY = 'setup_interno_screen_cache';
 
 const INITIAL_PREPARADORES = [
   'GABRIEL',
@@ -69,57 +68,35 @@ function getDataHoraCurtaSP(date: Date | number = new Date()): string {
   return `${data} às ${hora}`;
 }
 
-function getHoraSP(date: Date | number = new Date()): string {
-  const d = typeof date === 'number' ? new Date(date) : date;
-  return d.toLocaleTimeString('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
-
-function formatarTempoMs(ms: number): string {
-  const totalSeg = Math.floor(Math.max(0, ms) / 1000);
-  const h = Math.floor(totalSeg / 3600);
-  const m = Math.floor((totalSeg % 3600) / 60);
-  const s = totalSeg % 60;
-  return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':');
-}
-
 export class SetupApiService {
   private static cachedData: StoreData | null = null;
-  private static listeners: Array<(data: StoreData) => void> = [];
 
   public static getCachedData(): StoreData | null {
-    if (this.cachedData) return this.cachedData;
+    return this.cachedData || FirebaseService.getCurrentStore();
+  }
+
+  /**
+   * Obtém a store atual partindo do Firestore em tempo real.
+   * O localStorage funciona apenas como cache de tela para carregamento instantâneo.
+   */
+  public static getCurrentStore(): StoreData {
+    const fsData = FirebaseService.getCurrentStore();
+    if (fsData && (fsData.maquinas.length > 0 || Object.keys(fsData.setupsAtivos).length > 0 || fsData.concluidos.length > 0)) {
+      return fsData;
+    }
+    if (this.cachedData) {
+      return this.cachedData;
+    }
     try {
       if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           this.cachedData = JSON.parse(saved);
-          return this.cachedData;
+          return this.cachedData!;
         }
       }
-    } catch (e) {
-      console.warn('Erro ao ler cache local:', e);
-    }
-    return null;
-  }
-
-  public static getCurrentStore(): StoreData {
-    const cached = this.getCachedData();
-    if (cached) {
-      return {
-        maquinas: Array.isArray(cached.maquinas) ? cached.maquinas : [],
-        preparadores: Array.isArray(cached.preparadores) ? cached.preparadores : INITIAL_PREPARADORES,
-        tarefas1: Array.isArray(cached.tarefas1) ? cached.tarefas1 : INITIAL_TAREFAS_PARTE_1,
-        tarefas2: Array.isArray(cached.tarefas2) ? cached.tarefas2 : INITIAL_TAREFAS_PARTE_2,
-        tarefasPendencias: Array.isArray(cached.tarefasPendencias) ? cached.tarefasPendencias : INITIAL_TAREFAS_PENDENCIAS,
-        turnoConfig: cached.turnoConfig || INITIAL_TURNO,
-        setupsAtivos: cached.setupsAtivos || {},
-        concluidos: Array.isArray(cached.concluidos) ? cached.concluidos : [],
-        sheetConfig: cached.sheetConfig
-      };
+    } catch {
+      // Ignora erro de leitura do localStorage
     }
     return {
       maquinas: [],
@@ -133,110 +110,42 @@ export class SetupApiService {
     };
   }
 
-  public static setCache(data: StoreData, forceNotify: boolean = true) {
-    const oldStr = this.cachedData ? JSON.stringify(this.cachedData) : '';
-    const newStr = JSON.stringify(data);
+  public static setCache(data: StoreData, _forceNotify: boolean = false) {
     this.cachedData = data;
     try {
       if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, newStr);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       }
-    } catch (e) {
-      console.warn('Erro ao gravar cache local:', e);
-    }
-    if (forceNotify || oldStr !== newStr) {
-      this.notify(data);
+    } catch {
+      // Ignora erro de gravação em localStorage
     }
   }
 
-  public static subscribe(listener: (data: StoreData) => void) {
-    this.listeners.push(listener);
-    return () => {
-      this.listeners = this.listeners.filter((l) => l !== listener);
-    };
-  }
-
-  private static notify(data: StoreData) {
-    this.listeners.forEach((l) => {
-      try {
-        l(data);
-      } catch (err) {
-        console.error('Erro em listener do SetupApiService:', err);
-      }
+  public static subscribe(listener: (data: StoreData) => void): () => void {
+    return FirebaseService.subscribeStore((store) => {
+      this.setCache(store, false);
+      listener(store);
     });
   }
 
-  private static serverAvailable: boolean | null = null;
-
   public static isServerAvailable(): boolean {
-    return this.serverAvailable === true;
+    return false;
   }
 
-  /**
-   * Helper seguro que tenta chamar a API local/Express.
-   * Se já detectamos que a aplicação está rodando em ambiente serverless/Vercel (sem backend Express),
-   * executa de imediato sem emitir requisições de rede inúteis com erro 404.
-   */
-  private static async safeFetchJson<T>(url: string, options?: RequestInit): Promise<T | null> {
-    if (this.serverAvailable === false) {
-      return null;
-    }
-    try {
-      const res = await fetch(url, options);
-      const contentType = res.headers.get('content-type') || '';
-      if (!res.ok || !contentType.includes('application/json')) {
-        if (this.serverAvailable === null) {
-          this.serverAvailable = false;
-        }
-        return null;
-      }
-      this.serverAvailable = true;
-      return (await res.json()) as T;
-    } catch {
-      if (this.serverAvailable === null) {
-        this.serverAvailable = false;
-      }
-      return null;
-    }
+  public static syncFromCloud(_cloudData: StoreData) {
+    // Desativado: o Firestore é a única fonte da verdade, eliminando o arquivo local e conflitos
   }
 
   public static async fetchSync(): Promise<StoreData> {
-    // 1. Tenta backend local se estiver ativo
-    const serverData = await this.safeFetchJson<StoreData>(`/api/setup/sync?_t=${Date.now()}`, {
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache',
-        Pragma: 'no-cache'
-      }
-    });
-
-    if (serverData && serverData.turnoConfig) {
-      this.serverAvailable = true;
-      this.setCache(serverData, false);
-      return serverData;
-    }
-
-    // 2. Se estiver no Vercel (onde /api não existe ou retorna 404 HTML), busca diretamente do Firebase
     try {
-      const cloudData = await FirebaseService.obterStore();
-      if (cloudData && cloudData.turnoConfig) {
-        this.setCache(cloudData, false);
-        return cloudData;
-      }
-    } catch (e) {
-      console.warn('Aviso ao sincronizar do Firebase:', e);
+      const data = await FirebaseService.obterStore();
+      this.setCache(data, false);
+      return data;
+    } catch {
+      return this.getCurrentStore();
     }
-
-    // 3. Fallback no cache local
-    const current = this.getCurrentStore();
-    this.setCache(current, false);
-    return current;
   }
 
-  /**
-   * Localiza com segurança um setup ativo no store por id, rowId ou nome da máquina,
-   * evitando que discrepâncias sutis de identificador bloqueiem paradas ou salvamentos.
-   */
   public static findSetupAtivo(
     store: StoreData,
     id: string
@@ -262,46 +171,31 @@ export class SetupApiService {
   }
 
   public static async iniciarSetup(
-    rowId: string,
-    maquina: string,
-    peca: string,
-    modeloAnterior: string,
+    rowIdOrSetup: string | SetupAtivo,
+    maquina?: string,
+    peca?: string,
+    modeloAnterior?: string,
     forcedId?: string,
     forcedInicioMs?: number,
     forcedDataInicioStr?: string
   ): Promise<{ setup: SetupAtivo; data: StoreData }> {
+    if (typeof rowIdOrSetup === 'object') {
+      const setup = rowIdOrSetup;
+      const created = await FirebaseService.iniciarSetup(setup, setup.rowId);
+      return { setup: created, data: FirebaseService.getCurrentStore() };
+    }
+
     const agora = forcedInicioMs || Date.now();
     const dataInicioStr = forcedDataInicioStr || getDataHoraCurtaSP(agora);
     const id = forcedId || `setup_${agora}`;
+    const modClean = (modeloAnterior || '').trim() || 'NÃO INFORMADO';
 
-    // 1. Tenta rota do servidor se disponível
-    const serverResult = await this.safeFetchJson<{ setup: SetupAtivo; data: StoreData }>('/api/setup/iniciar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id,
-        rowId,
-        maquina,
-        peca,
-        modeloAnterior,
-        inicioMs: agora,
-        dataInicio: dataInicioStr
-      })
-    });
-
-    if (serverResult && serverResult.setup && serverResult.data) {
-      this.setCache(serverResult.data);
-      return serverResult;
-    }
-
-    // 2. Execução autônoma direta para Vercel / Cloud Run / Offline
-    const store = this.getCurrentStore();
     const novoSetup: SetupAtivo = {
       id,
-      rowId,
-      maquina,
-      peca,
-      modeloAnterior: (modeloAnterior || '').trim() || 'Não Informado',
+      rowId: String(rowIdOrSetup),
+      maquina: maquina || '',
+      peca: peca || '-',
+      modeloAnterior: modClean,
       prep1Val: '',
       prep2Val: '',
       dataInicio: dataInicioStr,
@@ -312,25 +206,16 @@ export class SetupApiService {
       paradaAtiva: false,
       historico: [`[${dataInicioStr}] Início do setup`],
       eventos: [],
-      checksStateParte1: new Array(store.tarefas1?.length || 0).fill(false),
-      checksStateParte2: new Array(store.tarefas2?.length || 0).fill(false),
-      checksStatePendencias: new Array(store.tarefasPendencias?.length || 0).fill(false),
+      checksStateParte1: [],
+      checksStateParte2: [],
+      checksStatePendencias: [],
       setupRegistrado: false,
-      updatedAt: agora
+      updatedAt: agora,
+      version: 1
     };
 
-    const nextStore: StoreData = {
-      ...store,
-      maquinas: (store.maquinas || []).filter((m) => String(m.id) !== String(rowId)),
-      setupsAtivos: {
-        ...(store.setupsAtivos || {}),
-        [id]: novoSetup
-      }
-    };
-
-    this.setCache(nextStore);
-    FirebaseService.salvarStore(nextStore).catch((e) => console.warn('Erro ao salvar no Firebase:', e));
-    return { setup: novoSetup, data: nextStore };
+    const created = await FirebaseService.iniciarSetup(novoSetup, String(rowIdOrSetup));
+    return { setup: created, data: FirebaseService.getCurrentStore() };
   }
 
   public static async autoSaveCard(
@@ -342,188 +227,27 @@ export class SetupApiService {
     checksPendencias?: boolean[],
     tempoDecorridoMs?: number
   ): Promise<SetupAtivo> {
-    const serverResult = await this.safeFetchJson<{ setup: SetupAtivo }>('/api/setup/auto-save-card', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, prep1Val, prep2Val, checksParte1, checksParte2, checksPendencias, tempoDecorridoMs })
-    });
-
-    if (serverResult && serverResult.setup) {
-      return serverResult.setup;
-    }
-
-    const store = this.getCurrentStore();
-    const found = this.findSetupAtivo(store, id);
-    if (!found) {
-      throw new Error('Setup ativo não encontrado');
-    }
-    const setup = found.setup;
-
-    if (prep1Val !== undefined) setup.prep1Val = prep1Val;
-    if (prep2Val !== undefined) setup.prep2Val = prep2Val;
-    if (checksParte1) setup.checksStateParte1 = checksParte1;
-    if (checksParte2) setup.checksStateParte2 = checksParte2;
-    if (checksPendencias) setup.checksStatePendencias = checksPendencias;
-    if (tempoDecorridoMs !== undefined && tempoDecorridoMs > 0) {
-      setup.tempoDecorridoMs = tempoDecorridoMs;
-    }
-    setup.lastTick = Date.now();
-    setup.updatedAt = Date.now();
-
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
-    return setup;
+    return await FirebaseService.autoSaveCard(
+      id,
+      prep1Val,
+      prep2Val,
+      checksParte1,
+      checksParte2,
+      checksPendencias,
+      tempoDecorridoMs
+    );
   }
 
   public static async aplicarDesconto(id: string, tipo: 'cafe' | 'almoco'): Promise<SetupAtivo> {
-    const serverResult = await this.safeFetchJson<{ setup: SetupAtivo }>('/api/setup/desconto', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, tipo })
-    });
-
-    if (serverResult && serverResult.setup) {
-      return serverResult.setup;
-    }
-
-    const store = this.getCurrentStore();
-    const found = this.findSetupAtivo(store, id);
-    if (!found) throw new Error('Setup não encontrado');
-    const setup = found.setup;
-
-    const agora = Date.now();
-    const strDH = new Date(agora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-
-    if (tipo === 'cafe') {
-      const dur = 15 * 60 * 1000;
-      const horaIni = getHoraSP(agora);
-      const horaFim = getHoraSP(agora + dur);
-      setup.deductionsMs += dur;
-      setup.historico.push(`[${horaIni} às ${horaFim}] Café (-15 min)`);
-      setup.eventos.push({
-        id: `ev_${agora}`,
-        timestamp: strDH,
-        tipo: 'cafe',
-        motivo: 'Café (-15m)',
-        inicioMs: agora,
-        fimMs: agora + dur,
-        duracaoMs: dur
-      });
-    } else if (tipo === 'almoco') {
-      const dur = 90 * 60 * 1000;
-      const horaIni = getHoraSP(agora);
-      const horaFim = getHoraSP(agora + dur);
-      setup.deductionsMs += dur;
-      setup.historico.push(`[${horaIni} às ${horaFim}] Almoço (-1.5h)`);
-      setup.eventos.push({
-        id: `ev_${agora}`,
-        timestamp: strDH,
-        tipo: 'almoco',
-        motivo: 'Almoço (-1.5h)',
-        inicioMs: agora,
-        fimMs: agora + dur,
-        duracaoMs: dur
-      });
-    }
-
-    setup.updatedAt = agora;
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
-    return setup;
+    return await FirebaseService.aplicarDesconto(id, tipo);
   }
 
-  public static async iniciarParada(id: string, motivo: string = ''): Promise<SetupAtivo> {
-    const serverResult = await this.safeFetchJson<{ setup: SetupAtivo }>('/api/setup/iniciar-parada', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, motivo })
-    });
-
-    if (serverResult && serverResult.setup) {
-      return serverResult.setup;
-    }
-
-    const store = this.getCurrentStore();
-    const found = this.findSetupAtivo(store, id);
-    if (!found) throw new Error('Setup não encontrado');
-    const setup = found.setup;
-
-    const agora = Date.now();
-    const strDH = new Date(agora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-    const eventoId = `parada_${agora}`;
-
-    const novoEvento: ParadaEvento = {
-      id: eventoId,
-      timestamp: strDH,
-      tipo: 'parada',
-      motivo: motivo.trim() || 'Parada iniciada',
-      inicioMs: agora,
-      emAndamento: true
-    };
-
-    setup.paradaAtiva = true;
-    setup.paradaAtual = novoEvento;
-    setup.eventos.push(novoEvento);
-    setup.historico.push(`[${strDH}] Parada iniciada: ${motivo.trim() || 'Sem motivo prévio'}`);
-    setup.updatedAt = agora;
-
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
-    return setup;
+  public static async iniciarParada(id: string, motivo: string): Promise<SetupAtivo> {
+    return await FirebaseService.iniciarParada(id, motivo);
   }
 
   public static async finalizarParada(id: string, motivo: string): Promise<SetupAtivo> {
-    const serverResult = await this.safeFetchJson<{ setup: SetupAtivo }>('/api/setup/finalizar-parada', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, motivo })
-    });
-
-    if (serverResult && serverResult.setup) {
-      return serverResult.setup;
-    }
-
-    const store = this.getCurrentStore();
-    const found = this.findSetupAtivo(store, id);
-    if (!found) throw new Error('Setup não encontrado');
-    const setup = found.setup;
-
-    const agora = Date.now();
-    const strDH = new Date(agora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-
-    setup.paradaAtiva = false;
-    if (setup.paradaAtual) {
-      const duracaoMs = Math.max(0, agora - setup.paradaAtual.inicioMs);
-      setup.paradaAtual.fimMs = agora;
-      setup.paradaAtual.duracaoMs = duracaoMs;
-      setup.paradaAtual.emAndamento = false;
-      setup.paradaAtual.motivo = motivo.trim();
-
-      setup.deductionsMs = (setup.deductionsMs || 0) + duracaoMs;
-
-      const ev = setup.eventos?.find((e) => e.id === setup.paradaAtual?.id);
-      if (ev) {
-        ev.fimMs = agora;
-        ev.duracaoMs = duracaoMs;
-        ev.emAndamento = false;
-        ev.motivo = motivo.trim();
-      }
-
-      const duracaoFormatada = formatarTempoMs(duracaoMs);
-      const horaIni = getHoraSP(setup.paradaAtual.inicioMs);
-      const horaFim = getHoraSP(agora);
-      setup.historico = (setup.historico || []).filter((h) => !h.includes('Parada iniciada'));
-      setup.historico.push(`[${horaIni} às ${horaFim}] Parada (${duracaoFormatada}): ${motivo.trim()}`);
-      setup.paradaAtual = undefined;
-    } else {
-      setup.historico = (setup.historico || []).filter((h) => !h.includes('Parada iniciada'));
-      setup.historico.push(`[${strDH}] Parada encerrada: ${motivo.trim()}`);
-    }
-
-    setup.updatedAt = agora;
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
-    return setup;
+    return await FirebaseService.finalizarParada(id, motivo);
   }
 
   public static async liberarMaquina(
@@ -532,591 +256,109 @@ export class SetupApiService {
     prep2: string,
     tempoFormatado: string,
     tempoMs: number
-  ): Promise<{ sucesso: boolean; setupConcluido: SetupConcluido; data: StoreData }> {
-    const serverResult = await this.safeFetchJson<{ sucesso: boolean; concluido: SetupConcluido; data: StoreData }>('/api/setup/liberar-maquina', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, prep1, prep2, tempoFormatado, tempoMs })
-    });
-
-    if (serverResult && serverResult.concluido && serverResult.data) {
-      this.setCache(serverResult.data);
-      return { sucesso: true, setupConcluido: serverResult.concluido, data: serverResult.data };
-    }
-
-    const store = this.getCurrentStore();
-    const found = this.findSetupAtivo(store, id);
-    if (!found) throw new Error('Setup não encontrado');
-    const { setup, key } = found;
-
-    const agora = Date.now();
-    const dataStr = getDataHoraCurtaSP(agora);
-
-    if (setup.paradaAtiva && setup.paradaAtual) {
-      const duracaoMs = Math.max(0, agora - setup.paradaAtual.inicioMs);
-      setup.paradaAtual.fimMs = agora;
-      setup.paradaAtual.duracaoMs = duracaoMs;
-      setup.paradaAtual.emAndamento = false;
-      const ev = setup.eventos?.find((e) => e.id === setup.paradaAtual?.id);
-      if (ev) {
-        ev.fimMs = agora;
-        ev.duracaoMs = duracaoMs;
-        ev.emAndamento = false;
-      }
-      setup.paradaAtiva = false;
-      const duracaoFormatada = formatarTempoMs(duracaoMs);
-      const horaIni = getHoraSP(setup.paradaAtual.inicioMs);
-      const horaFim = getHoraSP(agora);
-      setup.historico = (setup.historico || []).filter((h) => !h.includes('Parada iniciada'));
-      setup.historico.push(`[${horaIni} às ${horaFim}] Parada (${duracaoFormatada}): ${setup.paradaAtual.motivo}`);
-      setup.paradaAtual = undefined;
-    }
-
-    const horaLib = getHoraSP(agora);
-    setup.setupRegistrado = true;
-    setup.prep1Val = prep1;
-    setup.prep2Val = prep2;
-    setup.tempoFormatado = tempoFormatado;
-    setup.tempoSetupMs = tempoMs;
-    setup.pendenciasInicioMs = agora;
-    setup.updatedAt = agora;
-    setup.historico.push(`[${horaLib}] Máquina liberada para produção (Início das pendências)`);
-
-    const novoConcluido: SetupConcluido = {
-      id: `conc_${agora}`,
-      data: dataStr,
-      timestamp: agora,
-      maquina: setup.maquina,
-      peca: setup.peca,
-      modeloAnterior: setup.modeloAnterior,
-      prep1,
-      prep2,
-      tempo: tempoFormatado,
-      tempoMs,
-      historico: setup.historico.join(' | '),
-      eventos: setup.eventos,
-      pendenciasConcluidas: false,
-      pendenciasInicioMs: agora
+  ): Promise<{ setupConcluido: SetupConcluido; setupAtivo: SetupAtivo; concluido: SetupConcluido; data: StoreData }> {
+    const res = await FirebaseService.liberarMaquina(id, prep1, prep2, tempoFormatado, tempoMs);
+    return {
+      setupConcluido: res.setupConcluido,
+      setupAtivo: res.setupAtivo,
+      concluido: res.setupConcluido,
+      data: FirebaseService.getCurrentStore()
     };
-
-    store.concluidos = [novoConcluido, ...(store.concluidos || [])];
-    this.setCache(store);
-    FirebaseService.registrarSetupConcluido(novoConcluido).catch(() => {});
-    FirebaseService.salvarStore(store).catch(() => {});
-
-    return { sucesso: true, setupConcluido: novoConcluido, data: store };
   }
 
-  public static async encerrarPendencias(id: string): Promise<boolean> {
-    const serverResult = await this.safeFetchJson<{ sucesso: boolean; data: StoreData }>('/api/setup/encerrar-pendencias', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return true;
-    }
-
-    const store = this.getCurrentStore();
-    const found = this.findSetupAtivo(store, id);
-    if (!found) return false;
-    const { setup, key } = found;
-
-    const agora = Date.now();
-    const inicioPend = setup.pendenciasInicioMs || setup.updatedAt || agora;
-    // Respeita rigorosamente os horários e dias configurados do turno de trabalho
-    const duracaoPendMs = calcularTempoValidoTurno(inicioPend, agora, store.turnoConfig);
-    const tempoPendFormatado = formatarTempoMs(duracaoPendMs);
-    const horaIni = getHoraSP(inicioPend);
-    const horaFim = getHoraSP(agora);
-    const linhaPend = `[${horaIni} às ${horaFim}] [Pós-Setup] Organização & Pendências: ${tempoPendFormatado}`;
-
-    setup.historico.push(linhaPend);
-
-    const item =
-      (store.concluidos || []).find((c) => c.maquina === setup.maquina && c.peca === setup.peca && !c.pendenciasConcluidas) ||
-      (store.concluidos || []).find((c) => c.maquina === setup.maquina && c.peca === setup.peca);
-    if (item) {
-      item.pendenciasConcluidas = true;
-      item.pendenciasInicioMs = inicioPend;
-      item.pendenciasFimMs = agora;
-      item.tempoPendenciasMs = duracaoPendMs;
-      item.tempoPendenciasFormatado = tempoPendFormatado;
-
-      // Evidencia o período de pendências explicitamente no histórico
-      if (!item.historico || !item.historico.includes('Organização & Pendências')) {
-        item.historico = item.historico ? `${item.historico} | ${linhaPend}` : linhaPend;
-      }
-
-      const evPend: ParadaEvento = {
-        id: `ev_pend_${agora}`,
-        timestamp: `${horaIni} às ${horaFim}`,
-        tipo: 'info',
-        motivo: `[Pós-Setup] Organização & Pendências: ${tempoPendFormatado}`,
-        inicioMs: inicioPend,
-        fimMs: agora,
-        duracaoMs: duracaoPendMs
-      };
-      item.eventos = [...(item.eventos || []).filter((e) => !e.id.startsWith('ev_pend_')), evPend];
-
-      FirebaseService.registrarSetupConcluido(item).catch(() => {});
-    }
-
-    delete store.setupsAtivos[key];
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
-    return true;
+  public static async encerrarPendencias(id: string, turnoConfig?: TurnoConfig): Promise<{ sucesso: boolean; data: StoreData }> {
+    const sucesso = await FirebaseService.encerrarPendencias(id, turnoConfig);
+    return { sucesso, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async toggleSetupExterno(maquinaId: string, senha: string): Promise<void> {
-    const cleanPass = (senha || '').trim().toLowerCase();
-    if (cleanPass !== '1152' && cleanPass !== '8619' && cleanPass !== '5211' && cleanPass !== 'admin' && cleanPass !== 'lider') {
-      throw new Error('Senha incorreta! Digite a senha correta.');
-    }
-
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/toggle-setup-externo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ maquinaId, senha })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    const m = (store.maquinas || []).find((item) => String(item.id) === String(maquinaId));
-    if (m) {
-      m.setupExternoPronto = !m.setupExternoPronto;
-    }
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async cancelarSetupAtivo(id: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.cancelarSetupAtivo(id);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async deletarMaquina(maquinaId: string, senha: string): Promise<void> {
-    const cleanPass = (senha || '').trim().toLowerCase();
-    if (cleanPass !== '8619' && cleanPass !== '5211' && cleanPass !== 'admin' && cleanPass !== 'lider') {
-      throw new Error('Senha incorreta! Digite a senha correta.');
-    }
-
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/deletar-maquina', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ maquinaId, senha })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    store.maquinas = (store.maquinas || []).filter((m) => String(m.id) !== String(maquinaId));
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async editarTempoConcluido(setupId: string, novoTempo: string, _senha?: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.editarTempoConcluido(setupId, novoTempo);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async limparMaquinas(senha: string): Promise<void> {
-    const cleanPass = (senha || '').trim().toLowerCase();
-    if (cleanPass !== '8619' && cleanPass !== '5211' && cleanPass !== 'admin' && cleanPass !== 'lider') {
-      throw new Error('Senha incorreta! Digite a senha correta.');
-    }
-
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/limpar-maquinas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ senha })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    store.maquinas = [];
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async adicionarMaquina(maquina: string, peca: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.adicionarMaquina(maquina, peca);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async deletarPreparador(nome: string, senha: string): Promise<void> {
-    const cleanPass = (senha || '').trim().toLowerCase();
-    if (cleanPass !== '8619' && cleanPass !== '5211' && cleanPass !== 'admin' && cleanPass !== 'lider') {
-      throw new Error('Senha incorreta! Digite a senha correta.');
-    }
-
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/deletar-preparador', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome, senha })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    store.preparadores = store.preparadores.filter((p) => p !== nome);
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async deletarMaquina(maquinaId: string, _senha?: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.deletarMaquina(maquinaId);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async salvarTarefas(grupo: 'parte1' | 'parte2' | 'pendencias', tarefas: string[], senha: string): Promise<void> {
-    const cleanPass = (senha || '').trim().toLowerCase();
-    if (cleanPass !== '8619' && cleanPass !== '5211' && cleanPass !== 'admin' && cleanPass !== 'lider') {
-      throw new Error('Senha incorreta! Digite a senha correta.');
-    }
-
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/salvar-tarefas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ grupo, tarefas, senha })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    if (grupo === 'parte1') store.tarefas1 = tarefas;
-    else if (grupo === 'parte2') store.tarefas2 = tarefas;
-    else store.tarefasPendencias = tarefas;
-
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async toggleSetupExterno(maquinaId: string, _senha?: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.toggleSetupExterno(maquinaId);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async salvarTurno(turnoConfig: TurnoConfig, senha: string): Promise<void> {
-    const cleanPass = (senha || '').trim().toLowerCase();
-    if (cleanPass !== '8619' && cleanPass !== '5211' && cleanPass !== 'admin' && cleanPass !== 'lider') {
-      throw new Error('Senha incorreta! Digite a senha correta.');
-    }
-
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/turno', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ turnoConfig, senha })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    store.turnoConfig = turnoConfig;
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async limparMaquinas(_senha?: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.limparMaquinas();
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async adicionarMaquina(maquina: string, peca: string): Promise<void> {
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/adicionar-maquina', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ maquina, peca })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    const nova: Maquina = {
-      id: `m_${Date.now()}`,
-      maquina: maquina.trim().toUpperCase(),
-      peca: peca.trim().toUpperCase(),
-      setupExternoPronto: false
-    };
-    store.maquinas = [...(store.maquinas || []), nova];
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async adicionarPreparador(nome: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.adicionarPreparador(nome);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async adicionarPreparador(nome: string): Promise<void> {
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/adicionar-preparador', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    const clean = nome.trim().toUpperCase();
-    if (!store.preparadores.includes(clean)) {
-      store.preparadores = [...store.preparadores, clean];
-    }
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async deletarPreparador(nome: string, _senha?: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.deletarPreparador(nome);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async esvaziarConcluidos(senha?: string): Promise<void> {
-    const cleanPass = (senha || '').trim().toLowerCase();
-    if (cleanPass && cleanPass !== '8619' && cleanPass !== '5211' && cleanPass !== 'admin' && cleanPass !== 'lider') {
-      throw new Error('Senha incorreta! Digite a senha correta.');
-    }
-
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/esvaziar-concluidos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ senha })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    store.concluidos = [];
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async salvarTarefas(grupo: 'parte1' | 'parte2' | 'pendencias', tarefas: string[], _senha?: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.salvarTarefas(grupo, tarefas);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async carregarDados(backup: any, senha?: string): Promise<void> {
-    const cleanPass = (senha || '').trim().toLowerCase();
-    if (cleanPass && cleanPass !== '8619' && cleanPass !== '5211' && cleanPass !== 'admin' && cleanPass !== 'lider') {
-      throw new Error('Senha incorreta! Digite a senha correta.');
-    }
-
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/carregar-dados', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ backup, senha })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    if (backup && typeof backup === 'object') {
-      const store: StoreData = {
-        maquinas: Array.isArray(backup.maquinas) ? backup.maquinas : [],
-        preparadores: Array.isArray(backup.preparadores) ? backup.preparadores : INITIAL_PREPARADORES,
-        tarefas1: Array.isArray(backup.tarefas1) ? backup.tarefas1 : INITIAL_TAREFAS_PARTE_1,
-        tarefas2: Array.isArray(backup.tarefas2) ? backup.tarefas2 : INITIAL_TAREFAS_PARTE_2,
-        tarefasPendencias: Array.isArray(backup.tarefasPendencias) ? backup.tarefasPendencias : INITIAL_TAREFAS_PENDENCIAS,
-        turnoConfig: backup.turnoConfig || INITIAL_TURNO,
-        setupsAtivos: backup.setupsAtivos || {},
-        concluidos: Array.isArray(backup.concluidos) ? backup.concluidos : []
-      };
-      this.setCache(store);
-      await FirebaseService.salvarStore(store).catch(() => {});
-    }
+  public static async salvarTurno(turnoConfig: TurnoConfig, _senha?: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.salvarTurno(turnoConfig);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async resetDemo(): Promise<void> {
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/reset-demo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    store.tarefas1 = INITIAL_TAREFAS_PARTE_1;
-    store.tarefas2 = INITIAL_TAREFAS_PARTE_2;
-    store.tarefasPendencias = INITIAL_TAREFAS_PENDENCIAS;
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async salvarSheetConfig(sheetConfig?: GoogleSheetConfig): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.salvarSheetConfig(sheetConfig);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async cancelarSetupAtivo(id: string): Promise<StoreData | null> {
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/cancelar-setup-ativo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return serverResult.data;
-    }
-
-    const store = this.getCurrentStore();
-    const found = this.findSetupAtivo(store, id);
-    if (found) {
-      delete store.setupsAtivos[found.key];
-    } else if (store.setupsAtivos[id]) {
-      delete store.setupsAtivos[id];
-    }
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
-    return store;
+  public static async esvaziarConcluidos(_senha?: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.esvaziarConcluidos();
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async resetTotal(senha?: string): Promise<StoreData> {
-    const cleanPass = (senha || '').trim().toLowerCase();
-    if (cleanPass && cleanPass !== '8619' && cleanPass !== '5211' && cleanPass !== '1152' && cleanPass !== 'admin' && cleanPass !== 'lider') {
-      throw new Error('Senha incorreta! Digite a senha correta.');
-    }
-
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/reset-total', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ senha })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return serverResult.data;
-    }
-
-    const store: StoreData = {
-      maquinas: [],
-      preparadores: INITIAL_PREPARADORES,
-      tarefas1: INITIAL_TAREFAS_PARTE_1,
-      tarefas2: INITIAL_TAREFAS_PARTE_2,
-      tarefasPendencias: INITIAL_TAREFAS_PENDENCIAS,
-      turnoConfig: INITIAL_TURNO,
-      setupsAtivos: {},
-      concluidos: []
-    };
-
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
-    return store;
+  public static async resetDemo(): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.resetDemo();
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
-  public static async salvarSheetConfig(sheetConfig?: GoogleSheetConfig): Promise<void> {
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/sheets-config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sheetConfig })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    store.sheetConfig = sheetConfig;
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+  public static async resetTotal(_senha?: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    const data = await FirebaseService.resetTotal();
+    return { sucesso: true, data };
   }
 
-  public static async editarTempoConcluido(id: string, novoTempo: string, senha: string): Promise<StoreData | null> {
-    const cleanPass = (senha || '').trim().toLowerCase();
-    if (
-      cleanPass !== '8619' &&
-      cleanPass !== '5211' &&
-      cleanPass !== '1152' &&
-      cleanPass !== '1234' &&
-      cleanPass !== '1' &&
-      cleanPass !== 'admin' &&
-      cleanPass !== 'gestor' &&
-      cleanPass !== 'lider'
-    ) {
-      throw new Error('Senha incorreta! Digite a senha correta.');
-    }
-
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/editar-tempo-concluido', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, novoTempo, senha })
-    });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return serverResult.data;
-    }
-
-    const store = this.getCurrentStore();
-    const cleanTempo = novoTempo.trim();
-    let ms = 0;
-    const partes = cleanTempo.split(':');
-    if (partes.length === 3) {
-      ms = (+partes[0] * 3600 + +partes[1] * 60 + +partes[2]) * 1000;
-    } else if (partes.length === 2) {
-      ms = (+partes[0] * 60 + +partes[1]) * 1000;
-    } else {
-      ms = (+partes[0] || 0) * 60 * 1000;
-    }
-
-    store.concluidos = (store.concluidos || []).map((c) => {
-      if (c.id === id) {
-        return { ...c, tempo: cleanTempo, tempoMs: ms };
-      }
-      return c;
-    });
-
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
-    return store;
-  }
-
-  public static async syncFromCloud(cloudData: StoreData): Promise<void> {
-    if (this.serverAvailable === false) return;
-    try {
-      await fetch('/api/setup/sync-from-cloud', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cloudData })
-      });
-    } catch {
-      // Background non-blocking sync
-    }
+  public static async carregarDados(backup: any, _senha?: string): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.carregarDados(backup);
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 
   public static async mesclarPlanilha(
     concluidos?: SetupConcluido[],
     maquinas?: Maquina[],
-    substituirTudo: boolean = true,
+    _substituirTudo: boolean = true,
     preparadores?: string[],
     ativos?: Record<string, SetupAtivo>
-  ): Promise<void> {
-    const serverResult = await this.safeFetchJson<{ data: StoreData }>('/api/setup/mesclar-planilha', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ concluidos, maquinas, substituirTudo, preparadores, ativos })
+  ): Promise<{ sucesso: boolean; data: StoreData }> {
+    await FirebaseService.carregarDados({
+      concluidos,
+      maquinas,
+      preparadores,
+      setupsAtivos: ativos
     });
-
-    if (serverResult && serverResult.data) {
-      this.setCache(serverResult.data);
-      return;
-    }
-
-    const store = this.getCurrentStore();
-    if (substituirTudo) {
-      if (concluidos) store.concluidos = concluidos;
-      if (maquinas) store.maquinas = maquinas;
-      if (preparadores) store.preparadores = preparadores;
-      if (ativos) store.setupsAtivos = ativos;
-    } else {
-      if (maquinas) {
-        const exist = new Set(store.maquinas.map((m) => `${m.maquina}-${m.peca}`));
-        maquinas.forEach((m) => {
-          if (!exist.has(`${m.maquina}-${m.peca}`)) {
-            store.maquinas.push(m);
-            exist.add(`${m.maquina}-${m.peca}`);
-          }
-        });
-      }
-      if (concluidos) {
-        const existC = new Set(store.concluidos.map((c) => c.id));
-        concluidos.forEach((c) => {
-          if (!existC.has(c.id)) {
-            store.concluidos.push(c);
-            existC.add(c.id);
-          }
-        });
-      }
-    }
-    this.setCache(store);
-    FirebaseService.salvarStore(store).catch(() => {});
+    return { sucesso: true, data: FirebaseService.getCurrentStore() };
   }
 }

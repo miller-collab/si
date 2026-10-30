@@ -109,44 +109,31 @@ export default function App() {
   }, [checarTurno]);
 
   useEffect(() => {
-    // 1. Initial fetch from local server
+    // 1. Carga inicial dos dados granulares
     carregarDados();
 
-    // 2. Real-time Firestore sync listener: keeps all devices synchronized via Firebase without oscillation
+    // 2. Listener em tempo real do Firestore: sincroniza todos os 5 tablets automaticamente
     const unsubscribeFirestore = FirebaseService.subscribeStore((cloudData) => {
       if (cloudData) {
-        const curStr = JSON.stringify(storeDataRef.current || {});
-        const newStr = JSON.stringify(cloudData);
-        if (curStr !== newStr) {
-          setStoreData(cloudData);
-          checarTurno(cloudData.turnoConfig);
-          setOnline(true);
-          // Mantém o cache local e o disco do servidor 100% alinhados com o Firestore
-          SetupApiService.setCache(cloudData, false);
-          SetupApiService.syncFromCloud(cloudData);
-        }
+        setStoreData(cloudData);
+        checarTurno(cloudData.turnoConfig);
+        setOnline(true);
       }
     });
 
-    // 3. Monitoramento em tempo real do status do Firebase Cloud
+    // 3. Monitoramento de conexão do Firebase
     const unsubscribeFirebaseStatus = FirebaseService.subscribeStatus((st) => {
       if (st.connected) {
         setOnline(true);
       }
     });
 
-    // 4. Network health ping a cada 15 segundos (se backend local existir pinga, senão confere status da rede)
+    // 4. Verificação de status de rede
     const syncInterval = setInterval(() => {
-      if (SetupApiService.isServerAvailable()) {
-        fetch(`/api/setup/sync?_ping=${Date.now()}`, { cache: 'no-store' })
-          .then((r) => setOnline(r.ok))
-          .catch(() => setOnline(false));
-      } else {
-        setOnline(navigator.onLine);
-      }
+      setOnline(navigator.onLine);
     }, 15000);
 
-    // 5. Turno clock check every 15 seconds
+    // 5. Verificação de turno
     const turnoInterval = setInterval(() => {
       checarTurno();
     }, 15000);
@@ -230,8 +217,6 @@ export default function App() {
   const handleCancelarSetupAtivo = async (id: string) => {
     try {
       await SetupApiService.cancelarSetupAtivo(id);
-      const updated = await FirebaseService.cancelarSetupAtivo(id, storeData);
-      setStoreData(updated);
       showToast('Setup cancelado e removido com sucesso!');
     } catch (err) {
       console.error('Erro ao cancelar setup ativo:', err);
@@ -243,12 +228,6 @@ export default function App() {
   const handleRestaurarBackup = async (dados: StoreData) => {
     try {
       await SetupApiService.carregarDados(dados, '8619');
-      try {
-        await FirebaseService.salvarStore(dados);
-      } catch (fbErr) {
-        console.warn('Aviso ao salvar backup no Firebase:', fbErr);
-      }
-      await carregarDados();
       showToast('Backup restaurado com sucesso!');
     } catch (err: any) {
       console.error(err);
@@ -285,40 +264,27 @@ export default function App() {
       checksStateParte2: new Array((storeData.tarefas2 || []).length).fill(false),
       checksStatePendencias: new Array((storeData.tarefasPendencias || []).length).fill(false),
       setupRegistrado: false,
-      updatedAt: agora
+      updatedAt: agora,
+      version: 1
     };
 
-    // 1. Optimistic instant local update
-    const nextData: StoreData = {
-      ...storeData,
-      maquinas: (storeData.maquinas || []).filter((m) => String(m.id) !== String(maquina.id)),
+    // Atualização otimista na tela local
+    setStoreData((prev) => ({
+      ...prev,
+      maquinas: (prev.maquinas || []).filter((m) => String(m.id) !== String(maquina.id)),
       setupsAtivos: {
-        ...(storeData.setupsAtivos || {}),
+        ...(prev.setupsAtivos || {}),
         [setupId]: novoSetup
       }
-    };
-    setStoreData(nextData);
+    }));
     setAbaAtiva('ativos');
     showToast(`Setup iniciado para a máquina ${maquina.maquina}!`);
 
-    // 2. Immediate real-time Firebase Cloud sync for all tablets
-    FirebaseService.salvarStore(nextData).catch((fbErr) => {
-      console.warn('Sync Firebase ao iniciar setup:', fbErr);
-    });
-
-    // 3. Local backend disk persistence and internal cache
+    // Transação granular no Firestore: cria setupsAtivos/{id} e atualiza fila em config/geral
     try {
-      await SetupApiService.iniciarSetup(
-        maquina.id,
-        maquina.maquina,
-        maquina.peca,
-        modClean,
-        setupId,
-        agora,
-        dataInicioStr
-      );
+      await SetupApiService.iniciarSetup(novoSetup, String(maquina.id));
     } catch (err: any) {
-      console.warn('Backend local persist aviso:', err);
+      console.error('Erro ao iniciar setup granular:', err);
     }
   };
 
@@ -331,8 +297,33 @@ export default function App() {
     checksPendencias: boolean[],
     tempoDecorridoMs?: number
   ) => {
+    // 1. Atualização otimista imediata na interface do tablet local (0ms)
+    setStoreData((prev) => {
+      const setup = prev.setupsAtivos?.[id];
+      if (!setup) return prev;
+      const now = Date.now();
+      const updated: SetupAtivo = {
+        ...setup,
+        prep1Val: prep1Val !== undefined ? prep1Val : setup.prep1Val,
+        prep2Val: prep2Val !== undefined ? prep2Val : setup.prep2Val,
+        checksStateParte1: Array.isArray(checksParte1) ? checksParte1 : (setup.checksStateParte1 || []),
+        checksStateParte2: Array.isArray(checksParte2) ? checksParte2 : (setup.checksStateParte2 || []),
+        checksStatePendencias: Array.isArray(checksPendencias) ? checksPendencias : (setup.checksStatePendencias || []),
+        tempoDecorridoMs: tempoDecorridoMs !== undefined && tempoDecorridoMs > 0 ? tempoDecorridoMs : (setup.tempoDecorridoMs || 0),
+        updatedAt: now
+      };
+      return {
+        ...prev,
+        setupsAtivos: {
+          ...prev.setupsAtivos,
+          [id]: updated
+        }
+      };
+    });
+
+    // 2. Gravação atômica direta no Firestore sincronizando todos os outros tablets
     try {
-      const atualizado = await SetupApiService.autoSaveCard(
+      await SetupApiService.autoSaveCard(
         id,
         prep1Val,
         prep2Val,
@@ -341,19 +332,6 @@ export default function App() {
         checksPendencias,
         tempoDecorridoMs
       );
-      if (atualizado) {
-        setStoreData((prev) => {
-          const next = {
-            ...prev,
-            setupsAtivos: {
-              ...prev.setupsAtivos,
-              [id]: atualizado
-            }
-          };
-          FirebaseService.salvarStore(next).catch((e) => console.warn('Erro ao salvar card no Firebase:', e));
-          return next;
-        });
-      }
     } catch (err) {
       console.warn('Erro ao salvar card:', err);
     }
@@ -361,20 +339,7 @@ export default function App() {
 
   const handleDesconto = async (setupId: string, tipo: 'cafe' | 'almoco') => {
     try {
-      const updatedSetup = await SetupApiService.aplicarDesconto(setupId, tipo);
-      if (updatedSetup) {
-        setStoreData((prev) => {
-          const next = {
-            ...prev,
-            setupsAtivos: {
-              ...prev.setupsAtivos,
-              [updatedSetup.id]: updatedSetup
-            }
-          };
-          FirebaseService.salvarStore(next).catch((e) => console.warn('Erro ao salvar desconto no Firebase:', e));
-          return next;
-        });
-      }
+      await SetupApiService.aplicarDesconto(setupId, tipo);
       showToast(tipo === 'cafe' ? 'Intervalo de Café registrado!' : 'Intervalo de Almoço registrado!');
     } catch (err) {
       console.error(err);
@@ -384,20 +349,7 @@ export default function App() {
 
   const handleIniciarParada = async (setupId: string, motivo: string) => {
     try {
-      const updatedSetup = await SetupApiService.iniciarParada(setupId, motivo);
-      if (updatedSetup) {
-        setStoreData((prev) => {
-          const next = {
-            ...prev,
-            setupsAtivos: {
-              ...prev.setupsAtivos,
-              [updatedSetup.id]: updatedSetup
-            }
-          };
-          FirebaseService.salvarStore(next).catch((e) => console.warn('Erro ao salvar parada no Firebase:', e));
-          return next;
-        });
-      }
+      await SetupApiService.iniciarParada(setupId, motivo);
       showToast(`Parada iniciada: ${motivo}`);
     } catch (err) {
       console.error(err);
@@ -407,20 +359,7 @@ export default function App() {
 
   const handleFinalizarParada = async (setupId: string, motivo: string) => {
     try {
-      const updatedSetup = await SetupApiService.finalizarParada(setupId, motivo);
-      if (updatedSetup) {
-        setStoreData((prev) => {
-          const next = {
-            ...prev,
-            setupsAtivos: {
-              ...prev.setupsAtivos,
-              [updatedSetup.id]: updatedSetup
-            }
-          };
-          FirebaseService.salvarStore(next).catch((e) => console.warn('Erro ao finalizar parada no Firebase:', e));
-          return next;
-        });
-      }
+      await SetupApiService.finalizarParada(setupId, motivo);
       showToast('Parada finalizada e retomado!');
     } catch (err) {
       console.error(err);
@@ -436,17 +375,8 @@ export default function App() {
     tempoMs: number
   ) => {
     try {
-      const resp = await SetupApiService.liberarMaquina(id, prep1, prep2, tempoFormatado, tempoMs);
-      if (resp?.data) {
-        setStoreData(resp.data);
-        FirebaseService.salvarStore(resp.data).catch(() => {});
-      } else {
-        await carregarDados();
-      }
+      await SetupApiService.liberarMaquina(id, prep1, prep2, tempoFormatado, tempoMs);
       showToast(`Setup concluído! Máquina liberada para produção.`);
-      if (resp?.setupConcluido) {
-        FirebaseService.registrarSetupConcluido(resp.setupConcluido).catch(() => {});
-      }
     } catch (err) {
       console.error(err);
       showToast('Erro ao liberar máquina.');
@@ -456,11 +386,7 @@ export default function App() {
   const handleEncerrarPendencias = async (setupId: string) => {
     try {
       await SetupApiService.encerrarPendencias(setupId);
-      const updated = await carregarDados();
       showToast(`Pendências concluídas e setup arquivado no histórico!`);
-      if (updated) {
-        FirebaseService.salvarStore(updated).catch(() => {});
-      }
     } catch (err) {
       console.error(err);
       showToast('Erro ao encerrar pendências.');
@@ -469,10 +395,21 @@ export default function App() {
 
   const handleToggleSetupExterno = async (maquinaId: string, senha: string) => {
     try {
+      const clean = String(maquinaId || '').trim().toUpperCase();
+      setStoreData((prev) => ({
+        ...prev,
+        maquinas: (prev.maquinas || []).map((m) => {
+          if (
+            String(m.id || '').trim().toUpperCase() === clean ||
+            String(m.maquina || '').trim().toUpperCase() === clean
+          ) {
+            return { ...m, setupExternoPronto: !m.setupExternoPronto };
+          }
+          return m;
+        })
+      }));
       await SetupApiService.toggleSetupExterno(maquinaId, senha);
-      const updated = await carregarDados();
       showToast('Status de Setup Externo autorizado!');
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Senha incorreta!');
@@ -481,10 +418,17 @@ export default function App() {
 
   const handleDeletarMaquina = async (maquinaId: string, senha: string) => {
     try {
+      const clean = String(maquinaId || '').trim().toUpperCase();
+      setStoreData((prev) => ({
+        ...prev,
+        maquinas: (prev.maquinas || []).filter(
+          (m) =>
+            String(m.id || '').trim().toUpperCase() !== clean &&
+            String(m.maquina || '').trim().toUpperCase() !== clean
+        )
+      }));
       await SetupApiService.deletarMaquina(maquinaId, senha);
-      const updated = await carregarDados();
       showToast('Máquina excluída da fila.');
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Senha incorreta.');
@@ -494,9 +438,7 @@ export default function App() {
   const handleLimparMaquinas = async (senha: string) => {
     try {
       await SetupApiService.limparMaquinas(senha);
-      const updated = await carregarDados();
       showToast('Fila de máquinas limpa com sucesso.');
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Senha incorreta.');
@@ -506,9 +448,7 @@ export default function App() {
   const handleDeletarPreparador = async (nome: string, senha: string) => {
     try {
       await SetupApiService.deletarPreparador(nome, senha);
-      const updated = await carregarDados();
       showToast(`Preparador ${nome} removido.`);
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Senha incorreta.');
@@ -518,9 +458,7 @@ export default function App() {
   const handleSalvarTurno = async (config: TurnoConfig, senha: string) => {
     try {
       await SetupApiService.salvarTurno(config, senha);
-      const updated = await carregarDados();
       showToast('Horários de turno atualizados.');
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Erro ao salvar turno.');
@@ -530,9 +468,7 @@ export default function App() {
   const handleSalvarTarefas = async (grupo: 'parte1' | 'parte2' | 'pendencias', tarefas: string[], senha: string) => {
     try {
       await SetupApiService.salvarTarefas(grupo, tarefas, senha);
-      const updated = await carregarDados();
       showToast('Checklist atualizado com sucesso.');
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Erro ao salvar checklist.');
@@ -542,9 +478,7 @@ export default function App() {
   const handleAdicionarPreparador = async (nome: string) => {
     try {
       await SetupApiService.adicionarPreparador(nome);
-      const updated = await carregarDados();
       showToast(`Preparador ${nome} cadastrado!`);
-      if (updated) FirebaseService.salvarStore(updated).catch(() => {});
     } catch (err) {
       console.error(err);
       showToast('Erro ao adicionar preparador.');
@@ -554,15 +488,7 @@ export default function App() {
   const handleAdicionarMaquina = async (maquina: string, peca: string) => {
     try {
       await SetupApiService.adicionarMaquina(maquina, peca);
-      const updated = await carregarDados();
       showToast(`Máquina ${maquina} adicionada à fila!`);
-      if (updated) {
-        try {
-          await FirebaseService.salvarStore(updated);
-        } catch (fbErr) {
-          console.warn('Sync Firebase ao adicionar máquina:', fbErr);
-        }
-      }
     } catch (err: any) {
       console.error(err);
       showToast(err?.message || 'Erro ao adicionar máquina.');
@@ -571,16 +497,12 @@ export default function App() {
 
   const handleResetDemo = async () => {
     await SetupApiService.resetDemo();
-    await carregarDados();
     showToast('Checklists padrão restaurados com sucesso!');
   };
 
   const handleEsvaziarConcluidos = async (senha?: string) => {
     try {
       await SetupApiService.esvaziarConcluidos(senha || '8619');
-      const updated: StoreData = { ...storeData, concluidos: [] };
-      await FirebaseService.salvarStore(updated);
-      setStoreData(updated);
       showToast('Histórico de registros esvaziado com sucesso! Começando do zero.');
     } catch (err) {
       console.error(err);
@@ -597,34 +519,9 @@ export default function App() {
     }
 
     const cleanTempo = novoTempo.trim();
-    let ms = 0;
-    const partes = cleanTempo.split(':');
-    if (partes.length === 3) {
-      ms = (+partes[0] * 3600 + +partes[1] * 60 + +partes[2]) * 1000;
-    } else if (partes.length === 2) {
-      ms = (+partes[0] * 60 + +partes[1]) * 1000;
-    } else {
-      ms = (+partes[0] || 0) * 60 * 1000;
-    }
-
-    // 1. Atualização otimista imediata na interface
-    const updatedConcluidos = (storeData.concluidos || []).map((c) => {
-      if (c.id === id) {
-        return { ...c, tempo: cleanTempo, tempoMs: ms };
-      }
-      return c;
-    });
-    const updatedStore: StoreData = {
-      ...storeData,
-      concluidos: updatedConcluidos
-    };
-    setStoreData(updatedStore);
-
-    // 2. Gravação imediata na raiz (Firestore Cloud + Backend server)
     try {
-      await FirebaseService.editarTempoConcluido(id, cleanTempo, storeData);
       await SetupApiService.editarTempoConcluido(id, cleanTempo, s);
-      showToast(`Tempo atualizado para ${cleanTempo} e gravado na raiz com sucesso!`);
+      showToast(`Tempo atualizado para ${cleanTempo} com sucesso!`);
     } catch (err: any) {
       console.error('Erro ao editar tempo na raiz:', err);
       showToast(err?.message || 'Erro ao salvar tempo na raiz.');
